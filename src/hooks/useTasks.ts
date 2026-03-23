@@ -3,6 +3,9 @@ import { supabase } from '../lib/supabase'
 import { addSnapshot } from './useContextSnapshots'
 import type { Task, Priority } from '../types'
 
+// In-flight fetch deduplication for the global tasks fetch
+let globalTasksFetchPromise: Promise<void> | null = null
+
 export function useTasks() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
@@ -11,13 +14,34 @@ export function useTasks() {
   const tasksRef = useRef(tasks)
   useEffect(() => { tasksRef.current = tasks }, [tasks])
 
+  // Prevent duplicate fetches across strict-mode double-invokes
+  const fetchedRef = useRef(false)
+
   const fetchTasks = useCallback(async () => {
-    const { data } = await supabase
-      .from('tasks')
-      .select('*')
-      .order('created_at', { ascending: false })
-    if (data) setTasks(data)
-    setLoading(false)
+    if (fetchedRef.current) return
+    fetchedRef.current = true
+
+    // Deduplicate concurrent calls (e.g. two components mounting simultaneously)
+    if (globalTasksFetchPromise) {
+      await globalTasksFetchPromise
+      return
+    }
+
+    globalTasksFetchPromise = (async () => {
+      const { data } = await supabase
+        .from('tasks')
+        .select('*')
+        .order('created_at', { ascending: false })
+      console.log('[fetch]', 'tasks', null, data?.length ?? 0, 'items')
+      if (data) setTasks(data)
+      setLoading(false)
+    })()
+
+    try {
+      await globalTasksFetchPromise
+    } finally {
+      globalTasksFetchPromise = null
+    }
   }, [])
 
   useEffect(() => { fetchTasks() }, [fetchTasks])
@@ -49,8 +73,16 @@ export function useTasks() {
 
     if (data) {
       setTasks(prev => prev.map(t => t.id === tempId ? data : t))
+      if (data.project_id) {
+        addSnapshot(data.project_id, 'task_created', {
+          title: data.title,
+          priority: data.priority,
+        })
+      }
       return data
     }
+    // Rollback if insert failed
+    setTasks(prev => prev.filter(t => t.id !== tempId))
     return null
   }, [])
 
@@ -65,7 +97,11 @@ export function useTasks() {
     return data
   }, [])
 
-  const completeTask = useCallback(async (id: string, completed: boolean): Promise<void> => {
+  const completeTask = useCallback(async (
+    id: string,
+    completed: boolean,
+    onCompleted?: (task: Task) => void,
+  ): Promise<void> => {
     const now = new Date().toISOString()
 
     // Optimistic update
@@ -75,30 +111,47 @@ export function useTasks() {
         : t
     ))
 
+    if (completed) {
+      const task = tasksRef.current.find(t => t.id === id)
+      if (task) {
+        onCompleted?.(task)
+        if (task.project_id) {
+          addSnapshot(task.project_id, 'task_completed', {
+            task_id: task.id,
+            title: task.title,
+            priority: task.priority,
+            completed_at: now,
+          })
+        }
+      }
+    }
+
     // Background DB sync
     supabase.from('tasks').update({
       is_completed: completed,
       completed_at: completed ? now : null,
       updated_at: now,
     }).eq('id', id)
-
-    // Fire-and-forget snapshot only when completing (not un-completing)
-    if (completed) {
-      const task = tasksRef.current.find(t => t.id === id)
-      if (task?.project_id) {
-        addSnapshot(task.project_id, 'task_completed', {
-          task_id: task.id,
-          title: task.title,
-          priority: task.priority,
-          completed_at: now,
-        })
-      }
-    }
   }, [])
 
   const deleteTask = useCallback(async (id: string): Promise<void> => {
+    const toRestore = tasksRef.current.find(t => t.id === id)
+    console.log('[delete]', 'task', id)
+
+    // Optimistic remove
     setTasks(prev => prev.filter(t => t.id !== id))
-    supabase.from('tasks').delete().eq('id', id)
+
+    const { error } = await supabase.from('tasks').delete().eq('id', id)
+    console.log('[delete response]', 'task', id, error)
+
+    // Rollback on failure
+    if (error && toRestore) {
+      setTasks(prev =>
+        [...prev, toRestore].sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        )
+      )
+    }
   }, [])
 
   return { tasks, loading, createTask, updateTask, completeTask, deleteTask }

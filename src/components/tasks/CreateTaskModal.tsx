@@ -1,9 +1,13 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 import type { Priority, Project } from '../../types'
+import { useApp } from '../../context/AppContext'
+import { inferPriority } from '../../utils/inferPriority'
+import { addSnapshot } from '../../hooks/useContextSnapshots'
 
 interface Props {
   projects: Project[]
+  recentIdeas?: { content: string }[]
   onClose: () => void
   onCreate: (input: { title: string; priority: Priority; due_date: string | null; project_id: string | null }) => Promise<void>
 }
@@ -15,11 +19,53 @@ const PRIORITIES: { value: Priority; label: string; activeClass: string }[] = [
   { value: 'high', label: 'High', activeClass: 'bg-danger text-white' },
 ]
 
-export default function CreateTaskModal({ projects, onClose, onCreate }: Props) {
+export default function CreateTaskModal({ projects, recentIdeas = [], onClose, onCreate }: Props) {
+  const { tasks } = useApp()
+  const tasksRef = useRef(tasks)
+  useEffect(() => { tasksRef.current = tasks }, [tasks])
+
   const [title, setTitle] = useState('')
   const [priority, setPriority] = useState<Priority>('none')
+  const [isAutoInferred, setIsAutoInferred] = useState(false)
   const [dueDate, setDueDate] = useState('')
   const [projectId, setProjectId] = useState('')
+
+  // Debounced priority inference
+  useEffect(() => {
+    if (!title.trim() || !projectId) {
+      setIsAutoInferred(false)
+      return
+    }
+    const timer = setTimeout(() => {
+      const project = projects.find(p => p.id === projectId)
+      if (!project) return
+
+      const activeTasks = tasksRef.current
+        .filter(t => t.project_id === projectId && !t.is_completed)
+        .map(t => ({ title: t.title, priority: t.priority }))
+
+      const inferred = inferPriority(title, {
+        nextStep: project.ai_next_step ?? '',
+        whereStoped: project.ai_where_stopped ?? '',
+        activeTasks,
+        recentIdeas,
+      })
+
+      setPriority(inferred)
+      setIsAutoInferred(true)
+
+      // Log non-trivial inferences
+      if (inferred !== 'low') {
+        addSnapshot(projectId, 'priority_inferred', {
+          taskTitle: title,
+          inferredPriority: inferred,
+          reason: 'auto',
+        })
+      }
+    }, 500)
+
+    return () => clearTimeout(timer)
+  }, [title, projectId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -65,7 +111,7 @@ export default function CreateTaskModal({ projects, onClose, onCreate }: Props) 
                 <button
                   key={value}
                   type="button"
-                  onClick={() => setPriority(value)}
+                  onClick={() => { setPriority(value); setIsAutoInferred(false) }}
                   className={`flex-1 py-2 rounded-xl text-xs font-medium transition-colors ${
                     priority === value ? activeClass : 'bg-surface text-slate-500'
                   }`}
@@ -74,6 +120,9 @@ export default function CreateTaskModal({ projects, onClose, onCreate }: Props) 
                 </button>
               ))}
             </div>
+            {isAutoInferred && (
+              <p className="text-[11px] text-slate-400">Приоритет определён автоматически</p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">

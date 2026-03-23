@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Copy, Download, Check } from 'lucide-react'
-import { getSnapshots } from '../../hooks/useContextSnapshots'
-import type { AiSummaryContent, TaskCompletedContent, IdeaAddedContent } from '../../hooks/useContextSnapshots'
+import { getSnapshots, formatSnapshotFull } from '../../hooks/useContextSnapshots'
+import type { AiSummaryContent } from '../../hooks/useContextSnapshots'
 import type { Project, Task, Idea } from '../../types'
 
 interface Props {
@@ -18,32 +18,34 @@ const CATEGORY_RU: Record<string, string> = {
   other: 'Другое',
 }
 
-
 async function buildMarkdown(project: Project, activeTasks: Task[], ideas: Idea[]): Promise<string> {
   const snapshots = await getSnapshots(project.id)
   const now = new Date().toLocaleString('ru-RU', {
     day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
   })
 
-  const historyLines = snapshots.map(s => {
-    const d = new Date(s.created_at).toLocaleDateString('ru-RU')
-    switch (s.snapshot_type) {
-      case 'task_completed': {
-        const c = s.content as TaskCompletedContent
-        return `- [${d}] ✅ Задача выполнена: ${c.title} (приоритет: ${c.priority})`
-      }
-      case 'ai_summary': {
-        const c = s.content as AiSummaryContent
-        return `- [${d}] 🤖 AI резюме: ${c.what_done}`
-      }
-      case 'idea_added': {
-        const c = s.content as IdeaAddedContent
-        return `- [${d}] 💡 Идея добавлена: ${c.content} (${c.category})`
-      }
-      default:
-        return `- [${d}] ${s.snapshot_type}`
-    }
-  })
+  // ── Реализованный функционал: extract from last 3 ai_summary what_done ──────
+  const summarySnapshots = snapshots
+    .filter(s => s.snapshot_type === 'ai_summary')
+    .slice(0, 3)
+
+  const allSentences = new Set<string>()
+  for (const s of summarySnapshots) {
+    const c = s.content as AiSummaryContent
+    c.what_done
+      .split(/[.!?]+/)
+      .map(str => str.trim())
+      .filter(str => str.length > 10)
+      .forEach(str => allSentences.add(str))
+  }
+  const featuresSection = allSentences.size > 0
+    ? [...allSentences].map(s => `- ${s}`).join('\n')
+    : '_Нет данных о реализованном функционале_'
+
+  // ── История ──────────────────────────────────────────────────────────────────
+  const historyLines = snapshots
+    .map(s => formatSnapshotFull(s))
+    .filter(line => line.length > 0)
 
   const taskLines = activeTasks.length > 0
     ? activeTasks.map(t => `- ${t.title} (приоритет: ${t.priority}${t.due_date ? `, срок: ${t.due_date}` : ''})`).join('\n')
@@ -62,6 +64,9 @@ async function buildMarkdown(project: Project, activeTasks: Task[], ideas: Idea[
     `**Что сделано:** ${project.ai_what_done || '_не заполнено_'}`,
     `**Где остановились:** ${project.ai_where_stopped || '_не заполнено_'}`,
     `**Следующий шаг:** ${project.ai_next_step || '_не заполнено_'}`,
+    '',
+    '## Реализованный функционал',
+    featuresSection,
     '',
     '## История действий',
     historyLines.length > 0 ? historyLines.join('\n') : '_История пуста_',

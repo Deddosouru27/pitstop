@@ -1,14 +1,26 @@
-import { Sparkles, Loader2 } from 'lucide-react'
+import { Sparkles, Loader2, Check } from 'lucide-react'
 import type { Project } from '../../types'
 
 interface Props {
   project: Project
   onUpdate: () => Promise<void>
   updating: boolean
+  justUpdated?: boolean
+  countdown?: number | null
 }
 
-export default function ContextBlock({ project, onUpdate, updating }: Props) {
+export default function ContextBlock({
+  project,
+  onUpdate,
+  updating,
+  justUpdated = false,
+  countdown = null,
+}: Props) {
   const hasContext = project.ai_what_done || project.ai_where_stopped || project.ai_next_step
+
+  const pendingText = countdown !== null && countdown > 0
+    ? `Обновление контекста через ${countdown} сек...`
+    : null
 
   return (
     <div className="space-y-3">
@@ -17,12 +29,19 @@ export default function ContextBlock({ project, onUpdate, updating }: Props) {
         <button
           onClick={onUpdate}
           disabled={updating}
-          className="flex items-center gap-1.5 bg-accent hover:bg-accent/90 disabled:opacity-60 text-white text-xs font-semibold px-3.5 py-1.5 rounded-xl transition-colors"
+          className={`flex items-center gap-1.5 text-xs font-semibold px-3.5 py-1.5 rounded-xl transition-colors disabled:opacity-60 ${
+            justUpdated
+              ? 'bg-success/20 text-success'
+              : 'bg-accent hover:bg-accent/90 text-white'
+          }`}
         >
-          {updating
-            ? <><Loader2 size={12} className="animate-spin" /> Обновляю...</>
-            : <><Sparkles size={12} /> Обновить контекст</>
-          }
+          {updating ? (
+            <><Loader2 size={12} className="animate-spin" /> Обновляю...</>
+          ) : justUpdated ? (
+            <><Check size={12} /> Обновлено</>
+          ) : (
+            <><Sparkles size={12} /> Обновить контекст</>
+          )}
         </button>
       </div>
 
@@ -54,11 +73,22 @@ export default function ContextBlock({ project, onUpdate, updating }: Props) {
         </div>
       )}
 
-      {project.last_session_at && (
-        <p className="text-xs text-slate-600 text-right">
-          Обновлено {new Date(project.last_session_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-        </p>
-      )}
+      <div className="flex items-center justify-between">
+        {updating ? (
+          <p className="text-xs text-slate-400 flex items-center gap-1">
+            <Loader2 size={10} className="animate-spin" /> Обновляем контекст...
+          </p>
+        ) : pendingText ? (
+          <p className="text-xs text-slate-400">{pendingText}</p>
+        ) : (
+          <span />
+        )}
+        {project.last_session_at && (
+          <p className="text-xs text-slate-600">
+            Обновлено {new Date(project.last_session_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+          </p>
+        )}
+      </div>
     </div>
   )
 }

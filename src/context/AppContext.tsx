@@ -8,12 +8,13 @@ interface AppContextType {
   tasksLoading: boolean
   createTask: (input: { title: string; priority: Priority; due_date: string | null; project_id: string | null }) => Promise<Task | null>
   updateTask: (id: string, updates: Partial<Task>) => Promise<Task | null>
-  completeTask: (id: string, completed: boolean) => Promise<void>
+  completeTask: (id: string, completed: boolean, onCompleted?: (task: Task) => void) => Promise<void>
   deleteTask: (id: string) => Promise<void>
   projects: Project[]
   projectsLoading: boolean
   createProject: (input: Pick<Project, 'name' | 'color'>) => Promise<Project | null>
   updateProject: (id: string, updates: Partial<Project>) => Promise<Project | null>
+  deleteProject: (id: string) => Promise<void>
   selectedTaskId: string | null
   openTask: (id: string) => void
   closeTask: () => void
@@ -41,6 +42,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       projectsLoading: p.loading,
       createProject: p.createProject,
       updateProject: p.updateProject,
+      deleteProject: p.deleteProject,
       selectedTaskId,
       openTask,
       closeTask,
