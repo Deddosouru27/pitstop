@@ -48,6 +48,7 @@ export function useTasks() {
 
   const createTask = useCallback(async (input: {
     title: string
+    description?: string | null
     priority: Priority
     due_date: string | null
     project_id: string | null
