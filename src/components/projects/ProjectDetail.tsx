@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Plus, Pencil } from 'lucide-react'
+import { ArrowLeft, Plus, Pencil, Target } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
 import { useIdeas } from '../../hooks/useIdeas'
 import { callClaude } from '../../lib/anthropic'
@@ -12,6 +12,9 @@ import ContextExport from './ContextExport'
 import IdeasModal from './IdeasModal'
 import QuickAddIdeaSheet from './QuickAddIdeaSheet'
 import EditProjectModal from './EditProjectModal'
+import GoalInputSheet from './GoalInputSheet'
+import GoalPreviewSheet from './GoalPreviewSheet'
+import type { ProposedTask } from './GoalPreviewSheet'
 import TaskItem from '../tasks/TaskItem'
 import type { Idea, Task } from '../../types'
 
@@ -55,6 +58,12 @@ export default function ProjectDetail() {
   const [showEditModal, setShowEditModal] = useState(false)
   const [countdown, setCountdown] = useState<number | null>(null)
   const justUpdatedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [goalSheetOpen, setGoalSheetOpen] = useState(false)
+  const [previewSheetOpen, setPreviewSheetOpen] = useState(false)
+  const [goalText, setGoalText] = useState('')
+  const [proposedTasks, setProposedTasks] = useState<ProposedTask[]>([])
+  const [isDecomposing, setIsDecomposing] = useState(false)
+  const [isConfirming, setIsConfirming] = useState(false)
 
   const project = projects.find(p => p.id === id)
 
@@ -199,6 +208,91 @@ export default function ProjectDetail() {
     }
   }, [])
 
+  const handleDecompose = async (text: string) => {
+    if (!project) return
+    setIsDecomposing(true)
+    setGoalText(text)
+    try {
+      const contextMemory = await getContextForAI(project.id)
+      const currentActive = activeTasksRef.current
+      const currentCompleted = completedTasksRef.current
+
+      const systemPrompt = `Ты — опытный технический менеджер проекта.
+Пользователь описывает конкретную цель, которую хочет реализовать в своём проекте.
+Твоя задача: декомпозировать эту цель на конкретные исполнимые задачи.
+
+Правила:
+- Каждая задача должна быть конкретной и исполнимой (не "улучшить UX", а "добавить анимацию появления карточки")
+- НЕ дублируй активные задачи
+- НЕ предлагай то, что уже выполнено
+- Разбивай на 3-7 задач (не больше, не меньше)
+- Расставляй приоритеты логично: что блокирует остальное = high
+- Возвращай ТОЛЬКО валидный JSON-массив без markdown и пояснений
+
+Format: [{"title": string, "description": string, "priority": "low"|"medium"|"high"}]`
+
+      const userMessage = [
+        `Проект: ${project.name}`,
+        '',
+        `Цель: ${text}`,
+        '',
+        'Контекст проекта:',
+        contextMemory || '(история пуста)',
+        '',
+        'Активные задачи (НЕ дублировать):',
+        currentActive.length > 0 ? currentActive.map(t => `- ${t.title}`).join('\n') : 'нет',
+        '',
+        'Выполненные задачи (НЕ предлагать снова):',
+        currentCompleted.length > 0 ? currentCompleted.slice(0, 20).map(t => `- ${t.title}`).join('\n') : 'нет',
+        '',
+        'Текущее состояние:',
+        project.ai_where_stopped || 'не определено',
+        '',
+        'Декомпозируй цель на задачи.',
+      ].join('\n')
+
+      const response = await callClaude(systemPrompt, userMessage)
+      const match = response.replace(/```json|```/g, '').match(/\[[\s\S]*\]/)
+      if (!match) throw new Error('No array in response')
+      const parsed = JSON.parse(match[0]) as ProposedTask[]
+
+      setProposedTasks(parsed)
+      setGoalSheetOpen(false)
+      setPreviewSheetOpen(true)
+    } catch (err) {
+      console.error('Goal decomposition failed:', err)
+    } finally {
+      setIsDecomposing(false)
+    }
+  }
+
+  const handleConfirmGoal = async () => {
+    if (!project) return
+    setIsConfirming(true)
+    try {
+      for (const task of proposedTasks) {
+        await createTask({
+          title: task.title,
+          description: task.description,
+          priority: task.priority,
+          due_date: null,
+          project_id: project.id,
+        })
+        addSnapshot(project.id, 'task_created', {
+          title: task.title,
+          priority: task.priority,
+        })
+      }
+      setPreviewSheetOpen(false)
+      setGoalText('')
+      setProposedTasks([])
+    } catch (err) {
+      console.error('Task creation failed:', err)
+    } finally {
+      setIsConfirming(false)
+    }
+  }
+
   if (!project) {
     return (
       <div className="flex flex-col h-full items-center justify-center text-slate-500">
@@ -278,6 +372,15 @@ export default function ProjectDetail() {
             ideas={ideas}
           />
         </div>
+
+        {/* Set Goal button */}
+        <button
+          onClick={() => setGoalSheetOpen(true)}
+          className="w-full flex items-center justify-center gap-2 border border-purple-500/30 hover:border-purple-500/60 hover:bg-purple-500/5 text-purple-400 font-semibold rounded-2xl py-3 text-sm transition-colors"
+        >
+          <Target size={15} />
+          Задать цель
+        </button>
 
         {/* Tasks */}
         <div className="space-y-3">
@@ -377,6 +480,22 @@ export default function ProjectDetail() {
           onClose={() => setShowEditModal(false)}
         />
       )}
+
+      <GoalInputSheet
+        isOpen={goalSheetOpen}
+        onClose={() => setGoalSheetOpen(false)}
+        onDecompose={handleDecompose}
+        isLoading={isDecomposing}
+      />
+
+      <GoalPreviewSheet
+        isOpen={previewSheetOpen}
+        onClose={() => { setPreviewSheetOpen(false); setProposedTasks([]) }}
+        onConfirm={handleConfirmGoal}
+        tasks={proposedTasks}
+        goalText={goalText}
+        isConfirming={isConfirming}
+      />
     </div>
   )
 }
