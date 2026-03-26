@@ -1,11 +1,20 @@
 import { memo } from 'react'
-import type { Task, Project } from '../../types'
+import type { Task, Project, TaskStatus } from '../../types'
 import { formatDueDate } from '../../utils/dateFormat'
 
 const PRIORITY_DOT: Record<string, string> = {
   low: 'bg-[#10b981]',
   medium: 'bg-[#f59e0b]',
   high: 'bg-[#ef4444]',
+}
+
+const STATUS_CONFIG: Record<TaskStatus, { icon: string; label: string; className: string }> = {
+  backlog: { icon: '\u{1F4CB}', label: 'Backlog', className: 'text-slate-500' },
+  todo: { icon: '\u2705', label: 'To Do', className: 'text-slate-400' },
+  in_progress: { icon: '\u2699\uFE0F', label: 'In Progress', className: 'text-blue-400' },
+  review: { icon: '\u{1F440}', label: 'Review', className: 'text-yellow-400' },
+  blocked: { icon: '\u{1F6AB}', label: 'Blocked', className: 'text-red-400' },
+  done: { icon: '\u2714\uFE0F', label: 'Done', className: 'text-green-400' },
 }
 
 interface Props {
@@ -53,8 +62,16 @@ const TaskItem = memo(function TaskItem({ task, project, onToggle, onOpen }: Pro
         </span>
       </div>
 
-      {/* Right: priority + due date */}
+      {/* Right: status + priority + due date */}
       <div className="flex items-center gap-2 shrink-0">
+        {task.status && !task.is_completed && (
+          <span
+            className={`text-xs ${STATUS_CONFIG[task.status].className}`}
+            title={STATUS_CONFIG[task.status].label}
+          >
+            {STATUS_CONFIG[task.status].icon}
+          </span>
+        )}
         {task.priority !== 'none' && !task.is_completed && (
           <span className={`w-2 h-2 rounded-full ${PRIORITY_DOT[task.priority]}`} />
         )}
