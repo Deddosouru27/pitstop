@@ -66,6 +66,9 @@ export default function ProjectDetail() {
   const [isDecomposing, setIsDecomposing] = useState(false)
   const [isConfirming, setIsConfirming] = useState(false)
   const [showFullDetail, setShowFullDetail] = useState(false)
+  const [quickAddOpen, setQuickAddOpen] = useState(false)
+  const [quickAddTitle, setQuickAddTitle] = useState('')
+  const [quickAddPriority, setQuickAddPriority] = useState<'low' | 'medium' | 'high'>('medium')
 
   const project = projects.find(p => p.id === id)
 
@@ -74,7 +77,19 @@ export default function ProjectDetail() {
     return tasks.filter(t => t.project_id === id)
   }, [tasks, id])
 
-  const activeTasks = useMemo(() => projectTasks.filter(t => !t.is_completed), [projectTasks])
+  const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2, none: 3 }
+
+  const activeTasks = useMemo(() =>
+    projectTasks
+      .filter(t => !t.is_completed)
+      .sort((a, b) => {
+        const pa = PRIORITY_ORDER[a.priority] ?? 3
+        const pb = PRIORITY_ORDER[b.priority] ?? 3
+        if (pa !== pb) return pa - pb
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      }),
+    [projectTasks]
+  )
   const completedTasks = useMemo(() => projectTasks.filter(t => t.is_completed), [projectTasks])
   const [showDone, setShowDone] = useState(false)
 
@@ -272,18 +287,26 @@ Format: [{"title": string, "description": string, "priority": "low"|"medium"|"hi
     if (!project) return
     setIsConfirming(true)
     try {
+      const results: Array<{ title: string; ok: boolean }> = []
       for (const task of proposedTasks) {
-        await createTask({
+        const created = await createTask({
           title: task.title,
           description: task.description,
           priority: task.priority,
           due_date: null,
           project_id: project.id,
         })
-        addSnapshot(project.id, 'task_created', {
-          title: task.title,
-          priority: task.priority,
-        })
+        results.push({ title: task.title, ok: !!created })
+        if (created) {
+          addSnapshot(project.id, 'task_created', {
+            title: task.title,
+            priority: task.priority,
+          })
+        }
+      }
+      const failed = results.filter(r => !r.ok)
+      if (failed.length > 0) {
+        console.error('Some tasks failed to create:', failed.map(f => f.title))
       }
       setPreviewSheetOpen(false)
       setGoalText('')
@@ -339,6 +362,21 @@ Format: [{"title": string, "description": string, "priority": "low"|"medium"|"hi
   const handleAddIdea = (content: string) => {
     addIdea(content)
     addEvent(project.id, 'idea_added')
+  }
+
+  const handleQuickAddTask = async () => {
+    const trimmed = quickAddTitle.trim()
+    if (!trimmed || !project) return
+    await createTask({
+      title: trimmed,
+      priority: quickAddPriority,
+      due_date: null,
+      project_id: project.id,
+    })
+    setQuickAddTitle('')
+    setQuickAddPriority('medium')
+    setQuickAddOpen(false)
+    addEvent(project.id, 'task_created')
   }
 
   return (
@@ -401,11 +439,57 @@ Format: [{"title": string, "description": string, "priority": "low"|"medium"|"hi
 
           {/* Tasks */}
           <div className="space-y-3">
-            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Задачи · {activeTasks.length} активных
-            </h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Задачи · {activeTasks.length} активных
+              </h2>
+              <button
+                onClick={() => setQuickAddOpen(v => !v)}
+                className="w-7 h-7 flex items-center justify-center rounded-xl bg-accent hover:bg-accent/90 text-white transition-colors"
+              >
+                <Plus size={15} strokeWidth={2.5} />
+              </button>
+            </div>
 
-            {projectTasks.length === 0 && (
+            {quickAddOpen && (
+              <div className="bg-surface rounded-2xl p-4 space-y-3">
+                <input
+                  type="text"
+                  value={quickAddTitle}
+                  onChange={e => setQuickAddTitle(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleQuickAddTask() }}
+                  placeholder="Название задачи..."
+                  autoFocus
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-100 placeholder-slate-500 outline-none focus:border-accent/50 transition-colors"
+                />
+                <div className="flex items-center gap-2">
+                  {(['high', 'medium', 'low'] as const).map(p => (
+                    <button
+                      key={p}
+                      onClick={() => setQuickAddPriority(p)}
+                      className={`flex-1 text-xs font-semibold py-2 rounded-xl transition-colors ${
+                        quickAddPriority === p
+                          ? p === 'high' ? 'bg-red-500/20 text-red-400 border border-red-500/40'
+                          : p === 'medium' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/40'
+                          : 'bg-green-500/20 text-green-400 border border-green-500/40'
+                          : 'bg-white/5 text-slate-500 border border-white/10'
+                      }`}
+                    >
+                      {p === 'high' ? 'Высокий' : p === 'medium' ? 'Средний' : 'Низкий'}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={handleQuickAddTask}
+                  disabled={!quickAddTitle.trim()}
+                  className="w-full bg-accent hover:bg-accent/90 disabled:opacity-40 text-white font-semibold rounded-xl py-2.5 text-sm transition-colors"
+                >
+                  Добавить задачу
+                </button>
+              </div>
+            )}
+
+            {projectTasks.length === 0 && !quickAddOpen && (
               <p className="text-sm text-slate-600 text-center py-4">Задач в проекте нет</p>
             )}
 

@@ -1,7 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AppProvider, useApp } from './context/AppContext'
 import BottomNav from './components/BottomNav'
-import TasksTab from './components/tasks/TasksTab'
 import TaskDetail from './components/tasks/TaskDetail'
 import ProjectsTab from './components/projects/ProjectsTab'
 import ProjectDetail from './components/projects/ProjectDetail'
@@ -14,11 +13,11 @@ function AppShell() {
     <div className="flex flex-col h-dvh bg-[#0a0a0f] text-slate-100 overflow-hidden">
       <main className="flex-1 overflow-y-auto">
         <Routes>
-          <Route path="/" element={<TasksTab />} />
+          <Route path="/" element={<Navigate to="/projects" replace />} />
           <Route path="/projects" element={<ProjectsTab />} />
           <Route path="/projects/:id" element={<ProjectDetail />} />
           <Route path="/calendar" element={<CalendarTab />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<Navigate to="/projects" replace />} />
         </Routes>
       </main>
       <BottomNav />
