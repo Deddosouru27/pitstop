@@ -1,12 +1,13 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Plus, Pencil, Target } from 'lucide-react'
+import { ArrowLeft, Plus, Pencil, Target, ChevronLeft } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
 import { useIdeas } from '../../hooks/useIdeas'
 import { callClaude } from '../../lib/anthropic'
 import { getContextForAI, addSnapshot } from '../../hooks/useContextSnapshots'
 import { useAIBatcher } from '../../hooks/useAIBatcher'
 import { inferPriority } from '../../utils/inferPriority'
+import FocusView from './FocusView'
 import ContextBlock from './ContextBlock'
 import ContextExport from './ContextExport'
 import IdeasModal from './IdeasModal'
@@ -64,6 +65,7 @@ export default function ProjectDetail() {
   const [proposedTasks, setProposedTasks] = useState<ProposedTask[]>([])
   const [isDecomposing, setIsDecomposing] = useState(false)
   const [isConfirming, setIsConfirming] = useState(false)
+  const [showFullDetail, setShowFullDetail] = useState(false)
 
   const project = projects.find(p => p.id === id)
 
@@ -343,8 +345,11 @@ Format: [{"title": string, "description": string, "priority": "low"|"medium"|"hi
     <div className="flex flex-col min-h-full pb-4">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-4 border-b border-white/[0.06]">
-        <button onClick={() => navigate('/projects')} className="text-slate-500 hover:text-slate-300">
-          <ArrowLeft size={20} />
+        <button
+          onClick={() => showFullDetail ? setShowFullDetail(false) : navigate('/projects')}
+          className="text-slate-500 hover:text-slate-300"
+        >
+          {showFullDetail ? <ChevronLeft size={20} /> : <ArrowLeft size={20} />}
         </button>
         <div className="w-3 h-3 rounded-full shrink-0" style={{ background: project.color }} />
         <h1 className="flex-1 font-bold text-slate-100 truncate">{project.name}</h1>
@@ -356,63 +361,56 @@ Format: [{"title": string, "description": string, "priority": "low"|"medium"|"hi
         </button>
       </div>
 
-      <div className="px-4 py-5 space-y-8">
-        {/* AI Context Block */}
-        <div className="space-y-3">
-          <ContextBlock
-            project={project}
-            onUpdate={handleUpdateContext}
-            updating={updatingContext}
-            justUpdated={justUpdated}
-            countdown={countdown}
-          />
-          <ContextExport
-            project={project}
-            activeTasks={activeTasks}
-            ideas={ideas}
-          />
-        </div>
-
-        {/* Set Goal button */}
-        <button
-          onClick={() => setGoalSheetOpen(true)}
-          className="w-full flex items-center justify-center gap-2 border border-purple-500/30 hover:border-purple-500/60 hover:bg-purple-500/5 text-purple-400 font-semibold rounded-2xl py-3 text-sm transition-colors"
-        >
-          <Target size={15} />
-          Задать цель
-        </button>
-
-        {/* Tasks */}
-        <div className="space-y-3">
-          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-            Задачи · {activeTasks.length} активных
-          </h2>
-
-          {projectTasks.length === 0 && (
-            <p className="text-sm text-slate-600 text-center py-4">Задач в проекте нет</p>
-          )}
-
-          <div className="space-y-1.5">
-            {activeTasks.map(task => (
-              <TaskItem
-                key={task.id}
-                task={task}
-                project={project}
-                onToggle={handleToggleTask}
-                onOpen={openTask}
-              />
-            ))}
+      {!showFullDetail ? (
+        <FocusView
+          project={project}
+          activeTasks={activeTasks}
+          ideas={ideas}
+          onShowDetail={() => setShowFullDetail(true)}
+          onOpenTask={openTask}
+          onToggleTask={handleToggleTask}
+          onUpdateContext={handleUpdateContext}
+          updatingContext={updatingContext}
+        />
+      ) : (
+        <div className="px-4 py-5 space-y-8">
+          {/* AI Context Block */}
+          <div className="space-y-3">
+            <ContextBlock
+              project={project}
+              onUpdate={handleUpdateContext}
+              updating={updatingContext}
+              justUpdated={justUpdated}
+              countdown={countdown}
+            />
+            <ContextExport
+              project={project}
+              activeTasks={activeTasks}
+              ideas={ideas}
+            />
           </div>
 
-          {completedTasks.length > 0 && (
+          {/* Set Goal button */}
+          <button
+            onClick={() => setGoalSheetOpen(true)}
+            className="w-full flex items-center justify-center gap-2 border border-purple-500/30 hover:border-purple-500/60 hover:bg-purple-500/5 text-purple-400 font-semibold rounded-2xl py-3 text-sm transition-colors"
+          >
+            <Target size={15} />
+            Задать цель
+          </button>
+
+          {/* Tasks */}
+          <div className="space-y-3">
+            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              Задачи · {activeTasks.length} активных
+            </h2>
+
+            {projectTasks.length === 0 && (
+              <p className="text-sm text-slate-600 text-center py-4">Задач в проекте нет</p>
+            )}
+
             <div className="space-y-1.5">
-              <button
-                onClick={() => setShowDone(v => !v)}
-                className="text-xs font-semibold text-slate-600 uppercase tracking-wider"
-              >
-                Выполнено ({completedTasks.length}) {showDone ? '▲' : '▼'}
-              </button>
-              {showDone && completedTasks.map(task => (
+              {activeTasks.map(task => (
                 <TaskItem
                   key={task.id}
                   task={task}
@@ -422,35 +420,55 @@ Format: [{"title": string, "description": string, "priority": "low"|"medium"|"hi
                 />
               ))}
             </div>
-          )}
-        </div>
 
-        {/* Ideas card */}
-        {(() => {
-          const visibleCount = ideas.filter(i => !i.converted_to_task).length
-          return (
-            <div className="bg-surface rounded-2xl overflow-hidden">
-              <div
-                className="flex items-center gap-3 px-4 py-4 cursor-pointer active:opacity-70"
-                onClick={() => setShowIdeasModal(true)}
-              >
-                <span className="flex-1 font-semibold text-slate-100 text-sm">Идеи</span>
-                {visibleCount > 0 && (
-                  <span className="text-xs bg-white/10 text-slate-400 px-2 py-0.5 rounded-full">
-                    {visibleCount}
-                  </span>
-                )}
+            {completedTasks.length > 0 && (
+              <div className="space-y-1.5">
                 <button
-                  onClick={e => { e.stopPropagation(); setShowQuickAdd(true) }}
-                  className="w-7 h-7 flex items-center justify-center rounded-xl bg-accent hover:bg-accent/90 text-white transition-colors"
+                  onClick={() => setShowDone(v => !v)}
+                  className="text-xs font-semibold text-slate-600 uppercase tracking-wider"
                 >
-                  <Plus size={15} strokeWidth={2.5} />
+                  Выполнено ({completedTasks.length}) {showDone ? '▲' : '▼'}
                 </button>
+                {showDone && completedTasks.map(task => (
+                  <TaskItem
+                    key={task.id}
+                    task={task}
+                    project={project}
+                    onToggle={handleToggleTask}
+                    onOpen={openTask}
+                  />
+                ))}
               </div>
-            </div>
-          )
-        })()}
-      </div>
+            )}
+          </div>
+
+          {/* Ideas card */}
+          {(() => {
+            const visibleCount = ideas.filter(i => !i.converted_to_task).length
+            return (
+              <div className="bg-surface rounded-2xl overflow-hidden">
+                <div
+                  className="flex items-center gap-3 px-4 py-4 cursor-pointer active:opacity-70"
+                  onClick={() => setShowIdeasModal(true)}
+                >
+                  <span className="flex-1 font-semibold text-slate-100 text-sm">Идеи</span>
+                  {visibleCount > 0 && (
+                    <span className="text-xs bg-white/10 text-slate-400 px-2 py-0.5 rounded-full">
+                      {visibleCount}
+                    </span>
+                  )}
+                  <button
+                    onClick={e => { e.stopPropagation(); setShowQuickAdd(true) }}
+                    className="w-7 h-7 flex items-center justify-center rounded-xl bg-accent hover:bg-accent/90 text-white transition-colors"
+                  >
+                    <Plus size={15} strokeWidth={2.5} />
+                  </button>
+                </div>
+              </div>
+            )
+          })()}
+        </div>
+      )}
 
       {showIdeasModal && (
         <IdeasModal
