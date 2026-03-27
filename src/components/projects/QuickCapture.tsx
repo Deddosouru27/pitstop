@@ -27,7 +27,7 @@ export default function QuickCapture({ projects }: QuickCaptureProps) {
   const showFlash = (msg: string) => {
     if (flashTimer.current) clearTimeout(flashTimer.current)
     setFlash(msg)
-    flashTimer.current = setTimeout(() => setFlash(null), 2500)
+    flashTimer.current = setTimeout(() => setFlash(null), 3000)
   }
 
   const handleSubmit = async () => {
@@ -94,8 +94,12 @@ export default function QuickCapture({ projects }: QuickCaptureProps) {
           category,
         })
 
-        const projectName = projects.find(p => p.id === projectId)?.name ?? 'project'
-        showFlash(`"${projectName}" + ${category}`)
+        const project = projects.find(p => p.id === projectId)
+        if (project) {
+          showFlash(`Идея сохранена в проект «${project.name}»`)
+        } else {
+          showFlash('Идея сохранена без проекта')
+        }
       }
     } catch (err) {
       console.error('Quick capture failed:', err)

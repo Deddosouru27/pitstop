@@ -1,10 +1,9 @@
 import { NavLink } from 'react-router-dom'
-import { CheckSquare, FolderOpen, Calendar } from 'lucide-react'
+import { CheckSquare, FolderOpen } from 'lucide-react'
 
 const tabs = [
-  { to: '/', icon: CheckSquare, label: 'Tasks', end: true },
   { to: '/projects', icon: FolderOpen, label: 'Projects', end: false },
-  { to: '/calendar', icon: Calendar, label: 'Calendar', end: false },
+  { to: '/', icon: CheckSquare, label: 'Tasks', end: true },
 ]
 
 export default function BottomNav() {
