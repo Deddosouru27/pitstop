@@ -1,11 +1,7 @@
 import { useState, useRef, useCallback } from 'react'
+import type { BatcherEventType } from '../types'
 
-export type BatcherEventType =
-  | 'task_completed'
-  | 'idea_converted'
-  | 'priority_changed'
-  | 'task_created'
-  | 'idea_added'
+export type { BatcherEventType }
 
 const STRONG_TRIGGERS = new Set<BatcherEventType>([
   'task_completed',

@@ -1,7 +1,8 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
 import { useTasks } from '../hooks/useTasks'
 import { useProjects } from '../hooks/useProjects'
-import type { Task, Project, Priority } from '../types'
+import { useAutoContextUpdate } from '../hooks/useAutoContextUpdate'
+import type { Task, Project, Priority, BatcherEventType } from '../types'
 
 interface AppContextType {
   tasks: Task[]
@@ -18,6 +19,9 @@ interface AppContextType {
   selectedTaskId: string | null
   openTask: (id: string) => void
   closeTask: () => void
+  fireContextUpdate: (projectId: string) => Promise<void>
+  addBatcherEvent: (projectId: string, eventType: BatcherEventType) => void
+  pendingByProject: Record<string, 'strong' | 'weak'>
 }
 
 const AppContext = createContext<AppContextType | null>(null)
@@ -30,13 +34,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const openTask = useCallback((id: string) => setSelectedTaskId(id), [])
   const closeTask = useCallback(() => setSelectedTaskId(null), [])
 
+  const { onTaskCompleted, addBatcherEvent, fireContextUpdate, pendingByProject } = useAutoContextUpdate({
+    projects: p.projects,
+    tasks: t.tasks,
+    updateProject: p.updateProject,
+  })
+
+  // Wrap completeTask to auto-trigger context update on task completion
+  const completeTaskWithAutoUpdate = useCallback(async (
+    id: string,
+    completed: boolean,
+    onCompleted?: (task: Task) => void,
+  ) => {
+    await t.completeTask(id, completed, (task: Task) => {
+      onCompleted?.(task)
+      // Auto-trigger context update when task is completed
+      if (completed && task.project_id) {
+        onTaskCompleted(task.project_id)
+      }
+    })
+  }, [t.completeTask, onTaskCompleted])
+
   return (
     <AppContext.Provider value={{
       tasks: t.tasks,
       tasksLoading: t.loading,
       createTask: t.createTask,
       updateTask: t.updateTask,
-      completeTask: t.completeTask,
+      completeTask: completeTaskWithAutoUpdate,
       deleteTask: t.deleteTask,
       projects: p.projects,
       projectsLoading: p.loading,
@@ -46,6 +71,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       selectedTaskId,
       openTask,
       closeTask,
+      fireContextUpdate,
+      addBatcherEvent,
+      pendingByProject,
     }}>
       {children}
     </AppContext.Provider>

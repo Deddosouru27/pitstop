@@ -1,5 +1,12 @@
 export type Priority = 'none' | 'low' | 'medium' | 'high'
 
+export type BatcherEventType =
+  | 'task_completed'
+  | 'idea_converted'
+  | 'priority_changed'
+  | 'task_created'
+  | 'idea_added'
+
 export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'review' | 'blocked' | 'done'
 
 export interface Cycle {

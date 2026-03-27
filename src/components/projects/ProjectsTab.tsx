@@ -3,6 +3,7 @@ import { Plus, ChevronRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../../context/AppContext'
 import CreateProjectModal from './CreateProjectModal'
+import QuickCapture from './QuickCapture'
 
 export default function ProjectsTab() {
   const { projects, projectsLoading, tasks, createProject } = useApp()
@@ -29,6 +30,8 @@ export default function ProjectsTab() {
         <h1 className="text-2xl font-bold text-slate-100">Projects</h1>
         <p className="text-sm text-slate-500 mt-0.5">{projects.length} projects</p>
       </div>
+
+      <QuickCapture projects={projects} />
 
       <div className="px-4 space-y-2 flex-1">
         {projects.length === 0 && (
