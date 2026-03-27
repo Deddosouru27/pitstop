@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { callClaude } from '../lib/anthropic'
 import { addSnapshot } from './useContextSnapshots'
+import { useSupabaseRealtime } from './useSupabaseRealtime'
 import type { Idea } from '../types'
 
 const CATEGORIZE_PROMPT = 'You are a categorization assistant. Given an idea or note, return ONLY one of these categories as a single lowercase word: feature, ux, marketing, bug, other. Nothing else — just the single word.'
@@ -138,6 +139,28 @@ export function useIdeas(projectId: string) {
       })
     }
   }, [update])
+
+  // ── Realtime subscription (scoped to project) ─────────────────────────────
+  const realtimeOptions = useMemo(() => ({
+    table: 'ideas',
+    filter: `project_id=eq.${projectId}`,
+    channelName: `realtime-ideas-${projectId}`,
+  }), [projectId])
+
+  useSupabaseRealtime<Idea>(realtimeOptions, {
+    onInsert: (record) => {
+      update(prev => {
+        if (prev.some(i => i.id === record.id)) return prev
+        return [record, ...prev]
+      })
+    },
+    onUpdate: (record) => {
+      update(prev => prev.map(i => i.id === record.id ? record : i))
+    },
+    onDelete: (old) => {
+      if (old.id) update(prev => prev.filter(i => i.id !== old.id))
+    },
+  })
 
   return { ideas, addIdea, markConverted, deleteIdea }
 }

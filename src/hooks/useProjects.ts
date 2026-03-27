@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
+import { useSupabaseRealtime } from './useSupabaseRealtime'
 import type { Project } from '../types'
 
 export function useProjects() {
@@ -25,6 +26,27 @@ export function useProjects() {
   }, [])
 
   useEffect(() => { fetchProjects() }, [fetchProjects])
+
+  // ── Realtime subscription ───────────────────────────────────────────────────
+  const realtimeOptions = useMemo(() => ({
+    table: 'projects',
+    channelName: 'realtime-projects',
+  }), [])
+
+  useSupabaseRealtime<Project>(realtimeOptions, {
+    onInsert: (record) => {
+      setProjects(prev => {
+        if (prev.some(p => p.id === record.id)) return prev
+        return [record, ...prev]
+      })
+    },
+    onUpdate: (record) => {
+      setProjects(prev => prev.map(p => p.id === record.id ? record : p))
+    },
+    onDelete: (old) => {
+      if (old.id) setProjects(prev => prev.filter(p => p.id !== old.id))
+    },
+  })
 
   const createProject = useCallback(async (input: Pick<Project, 'name' | 'color'>): Promise<Project | null> => {
     const { data } = await supabase
