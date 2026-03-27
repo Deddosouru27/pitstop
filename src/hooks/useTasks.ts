@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { addSnapshot } from './useContextSnapshots'
+import { useSupabaseRealtime } from './useSupabaseRealtime'
 import type { Task, Priority } from '../types'
 
 // In-flight fetch deduplication for the global tasks fetch
@@ -45,6 +46,27 @@ export function useTasks() {
   }, [])
 
   useEffect(() => { fetchTasks() }, [fetchTasks])
+
+  // ── Realtime subscription ───────────────────────────────────────────────────
+  const realtimeOptions = useMemo(() => ({
+    table: 'tasks',
+    channelName: 'realtime-tasks',
+  }), [])
+
+  useSupabaseRealtime<Task>(realtimeOptions, {
+    onInsert: (record) => {
+      setTasks(prev => {
+        if (prev.some(t => t.id === record.id)) return prev
+        return [record, ...prev]
+      })
+    },
+    onUpdate: (record) => {
+      setTasks(prev => prev.map(t => t.id === record.id ? record : t))
+    },
+    onDelete: (old) => {
+      if (old.id) setTasks(prev => prev.filter(t => t.id !== old.id))
+    },
+  })
 
   const createTask = useCallback(async (input: {
     title: string

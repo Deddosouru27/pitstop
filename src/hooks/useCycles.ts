@@ -1,5 +1,6 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
+import { useSupabaseRealtime } from './useSupabaseRealtime'
 import type { Cycle, CycleStats } from '../types'
 
 export function useCycles(projectId: string) {
@@ -88,6 +89,28 @@ export function useCycles(projectId: string) {
       completion_rate: total > 0 ? Math.round((done / total) * 100) : 0,
     }
   }, [])
+
+  // ── Realtime subscription (scoped to project) ─────────────────────────────
+  const realtimeOptions = useMemo(() => ({
+    table: 'cycles',
+    filter: `project_id=eq.${projectId}`,
+    channelName: `realtime-cycles-${projectId}`,
+  }), [projectId])
+
+  useSupabaseRealtime<Cycle>(realtimeOptions, {
+    onInsert: (record) => {
+      setCycles(prev => {
+        if (prev.some(c => c.id === record.id)) return prev
+        return [record, ...prev]
+      })
+    },
+    onUpdate: (record) => {
+      setCycles(prev => prev.map(c => c.id === record.id ? record : c))
+    },
+    onDelete: (old) => {
+      if (old.id) setCycles(prev => prev.filter(c => c.id !== old.id))
+    },
+  })
 
   return { cycles, loading, error, createCycle, updateCycle, getCycleStats }
 }
