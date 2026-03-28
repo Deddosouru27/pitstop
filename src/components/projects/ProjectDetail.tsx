@@ -81,7 +81,7 @@ export default function ProjectDetail() {
 
   const activeTasks = useMemo(() =>
     projectTasks
-      .filter(t => !t.is_completed)
+      .filter(t => !t.is_completed && t.status !== 'done' && t.status !== 'cancelled')
       .sort((a, b) => {
         const pa = PRIORITY_ORDER[a.priority] ?? 3
         const pb = PRIORITY_ORDER[b.priority] ?? 3

@@ -88,8 +88,11 @@ export default function FocusView({
   const [copied, setCopied] = useState(false)
   const [copyLoading, setCopyLoading] = useState(false)
 
+  const FOCUS_STATUSES = new Set<string | undefined>(['backlog', 'todo', 'in_progress', undefined])
+
   const nextTasks = useMemo(() => {
     return [...activeTasks]
+      .filter(t => FOCUS_STATUSES.has(t.status))
       .sort((a, b) => (PRIORITY_ORDER[a.priority] ?? 3) - (PRIORITY_ORDER[b.priority] ?? 3))
       .slice(0, 3)
   }, [activeTasks])

@@ -15,6 +15,7 @@ const STATUS_DOT: Record<TaskStatus, { color: string; label: string }> = {
   review: { color: 'bg-purple-400', label: 'Review' },
   blocked: { color: 'bg-red-500', label: 'Blocked' },
   done: { color: 'bg-green-500', label: 'Done' },
+  cancelled: { color: 'bg-slate-600', label: 'Cancelled' },
 }
 
 interface Props {
@@ -64,7 +65,7 @@ const TaskItem = memo(function TaskItem({ task, project, onToggle, onOpen }: Pro
 
       {/* Right: status + priority + due date */}
       <div className="flex items-center gap-2 shrink-0">
-        {task.status && !task.is_completed && (
+        {task.status && !task.is_completed && STATUS_DOT[task.status] && (
           <span
             className={`w-2.5 h-2.5 rounded-full ${STATUS_DOT[task.status].color}`}
             title={STATUS_DOT[task.status].label}

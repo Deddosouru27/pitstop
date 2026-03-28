@@ -7,7 +7,7 @@ export type BatcherEventType =
   | 'task_created'
   | 'idea_added'
 
-export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'review' | 'blocked' | 'done'
+export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'review' | 'blocked' | 'done' | 'cancelled'
 
 export interface Cycle {
   id: string
