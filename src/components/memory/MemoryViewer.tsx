@@ -65,6 +65,16 @@ export default function MemoryViewer() {
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all')
   const [search, setSearch] = useState('')
 
+  const stats = useMemo(() => {
+    const todayStr = new Date().toISOString().slice(0, 10)
+    const todayCount = memories.filter(m => m.created_at.slice(0, 10) === todayStr).length
+    const bySrc: Record<string, number> = {}
+    for (const m of memories) {
+      if (m.source) bySrc[m.source] = (bySrc[m.source] ?? 0) + 1
+    }
+    return { total: memories.length, today: todayCount, bySrc }
+  }, [memories])
+
   const filtered = useMemo(() => {
     let result = memories
     if (sourceFilter !== 'all') {
@@ -94,12 +104,35 @@ export default function MemoryViewer() {
   return (
     <div className="flex flex-col min-h-full pb-4">
       {/* Header */}
-      <div className="px-4 pt-6 pb-4">
+      <div className="px-4 pt-6 pb-3">
         <div className="flex items-center gap-2">
           <Brain size={20} className="text-purple-400" strokeWidth={1.75} />
           <h1 className="text-2xl font-bold text-slate-100">Memory</h1>
         </div>
-        <p className="text-sm text-slate-500 mt-0.5">Всего записей: {memories.length}</p>
+      </div>
+
+      {/* Stats */}
+      <div className="px-4 pb-4 space-y-2">
+        <div className="grid grid-cols-2 gap-2">
+          <div className="bg-white/5 rounded-2xl px-4 py-3 border border-white/[0.06]">
+            <p className="text-[11px] text-slate-500 uppercase tracking-wider font-medium">Всего</p>
+            <p className="text-2xl font-bold text-slate-100 mt-0.5">{stats.total}</p>
+          </div>
+          <div className="bg-white/5 rounded-2xl px-4 py-3 border border-white/[0.06]">
+            <p className="text-[11px] text-slate-500 uppercase tracking-wider font-medium">За сегодня</p>
+            <p className="text-2xl font-bold text-slate-100 mt-0.5">{stats.today}</p>
+          </div>
+        </div>
+        {Object.keys(stats.bySrc).length > 0 && (
+          <div className="bg-white/5 rounded-2xl px-4 py-3 border border-white/[0.06] flex items-center gap-3 flex-wrap">
+            <p className="text-[11px] text-slate-500 uppercase tracking-wider font-medium shrink-0">Источники</p>
+            {Object.entries(stats.bySrc).map(([src, count]) => (
+              <span key={src} className={`text-xs font-medium px-2.5 py-1 rounded-full ${SOURCE_COLORS[src] ?? 'bg-slate-800 text-slate-400'}`}>
+                {src} · {count}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Search */}
