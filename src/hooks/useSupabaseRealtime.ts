@@ -43,6 +43,7 @@ export function useSupabaseRealtime<T extends object>(
         'postgres_changes',
         filterOpts,
         (payload: RealtimePostgresChangesPayload<T>) => {
+          console.log('ideas realtime event:', payload)
           switch (payload.eventType) {
             case 'INSERT':
               handlersRef.current.onInsert?.(payload.new)
