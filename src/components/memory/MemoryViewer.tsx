@@ -35,7 +35,7 @@ function MemoryCard({ memory, onOpen }: { memory: Memory; onOpen: (m: Memory) =>
       onClick={() => onOpen(memory)}
       className="w-full text-left bg-white/5 rounded-2xl p-4 space-y-2 border border-white/[0.06] active:opacity-60 transition-opacity"
     >
-      <p className="text-slate-100 text-sm leading-relaxed line-clamp-2">{memory.content}</p>
+      <p className="text-slate-100 text-sm leading-relaxed line-clamp-2 overflow-hidden">{memory.content}</p>
 
       <div className="flex items-center gap-2 flex-wrap">
         {memory.source && (

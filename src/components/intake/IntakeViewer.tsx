@@ -99,7 +99,7 @@ export default function IntakeViewer({ ideas, projects, onConvert, onDelete, onO
             </div>
 
             {/* Content */}
-            <p className="text-slate-100 text-sm leading-relaxed line-clamp-2">{idea.content}</p>
+            <p className="text-slate-100 text-sm leading-relaxed line-clamp-2 overflow-hidden">{idea.content}</p>
             {idea.extracted_ideas && idea.extracted_ideas.length > 0 && (
               <div className="space-y-0.5">
                 {idea.extracted_ideas.slice(0, 2).map((item, i) => (

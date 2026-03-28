@@ -33,7 +33,7 @@ function IdeaCard({ idea, onConvert, onDelete }: { idea: Idea; onConvert: (i: Id
   return (
     <div className="bg-surface-el rounded-2xl px-4 py-3 space-y-2">
       <div className="flex items-start gap-2">
-        <p className="flex-1 text-sm text-slate-200 leading-relaxed line-clamp-2">{idea.content}</p>
+        <p className="flex-1 text-sm text-slate-200 leading-relaxed line-clamp-2 overflow-hidden">{idea.content}</p>
         <button
           onClick={() => onDelete(idea.id)}
           className="text-slate-600 hover:text-danger transition-colors shrink-0 mt-0.5"
