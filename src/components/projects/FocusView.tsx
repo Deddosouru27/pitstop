@@ -220,6 +220,34 @@ export default function FocusView({
         </div>
       )}
 
+      {/* Repo / Deploy links */}
+      {(project.github_repo || project.deploy_url) && (
+        <div className="flex flex-wrap gap-2">
+          {project.github_repo && (
+            <a
+              href={`https://github.com/${project.github_repo}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-xs text-slate-400 bg-white/5 hover:bg-white/10 active:bg-white/10 px-3 py-1.5 rounded-xl transition-colors"
+              onClick={e => e.stopPropagation()}
+            >
+              📦 {project.github_repo}
+            </a>
+          )}
+          {project.deploy_url && (
+            <a
+              href={project.deploy_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-xs text-slate-400 bg-white/5 hover:bg-white/10 active:bg-white/10 px-3 py-1.5 rounded-xl transition-colors"
+              onClick={e => e.stopPropagation()}
+            >
+              🚀 {project.deploy_url.replace(/^https?:\/\//, '')}
+            </a>
+          )}
+        </div>
+      )}
+
       {/* Next 3 tasks */}
       {nextTasks.length > 0 && (
         <div className="space-y-2">
@@ -230,7 +258,7 @@ export default function FocusView({
             {nextTasks.map((task, idx) => (
               <div
                 key={task.id}
-                className="flex items-center gap-3 px-4 py-3 bg-surface rounded-2xl active:opacity-60 cursor-pointer"
+                className="flex items-start gap-3 px-4 py-3 bg-surface rounded-2xl active:opacity-60 cursor-pointer"
                 onClick={() => onOpenTask(task.id)}
               >
                 <button
@@ -238,7 +266,16 @@ export default function FocusView({
                   className="shrink-0 w-[22px] h-[22px] rounded-full border-2 border-slate-600 flex items-center justify-center transition-all hover:border-purple-500"
                 />
                 <span className="text-xs text-slate-500 font-mono w-4 shrink-0">{idx + 1}</span>
-                <span className="flex-1 min-w-0 truncate text-sm text-slate-100">{task.title}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="truncate text-sm text-slate-100">{task.title}</p>
+                  {task.description && (
+                    <p className="truncate text-xs text-slate-500 mt-0.5">
+                      {task.description.length > 80
+                        ? task.description.slice(0, 80) + '…'
+                        : task.description}
+                    </p>
+                  )}
+                </div>
                 {task.priority !== 'none' && (
                   <span className={`shrink-0 w-2 h-2 rounded-full ${
                     task.priority === 'high' ? 'bg-red-500' :
