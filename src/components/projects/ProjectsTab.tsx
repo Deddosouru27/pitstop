@@ -4,11 +4,13 @@ import { useNavigate } from 'react-router-dom'
 import { useApp } from '../../context/AppContext'
 import CreateProjectModal from './CreateProjectModal'
 import QuickCapture from './QuickCapture'
+import { useAutorunStatus } from '../../hooks/useAutorunStatus'
 
 export default function ProjectsTab() {
   const { projects, projectsLoading, tasks, createProject } = useApp()
   const navigate = useNavigate()
   const [showModal, setShowModal] = useState(false)
+  const autorunState = useAutorunStatus()
 
   const taskCounts = useMemo(() => {
     const counts: Record<string, number> = {}
@@ -30,6 +32,32 @@ export default function ProjectsTab() {
         <h1 className="text-2xl font-bold text-slate-100">Projects</h1>
         <p className="text-sm text-slate-500 mt-0.5">{projects.length} projects</p>
       </div>
+
+      {/* Autorun status indicator */}
+      {autorunState !== 'idle' && (
+        <div className="px-4 pb-3">
+          <div className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-medium ${
+            autorunState === 'running'
+              ? 'bg-purple-500/10 border border-purple-500/20 text-purple-300'
+              : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300'
+          }`}>
+            {autorunState === 'running' ? (
+              <>
+                <span className="relative flex h-2 w-2 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-purple-500" />
+                </span>
+                Autorun запущен
+              </>
+            ) : (
+              <>
+                <span className="text-base leading-none">✅</span>
+                Только что выполнено
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       <QuickCapture projects={projects} />
 
