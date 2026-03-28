@@ -8,12 +8,13 @@ import CalendarTab from './components/calendar/CalendarTab'
 import IdeasTab from './components/ideas/IdeasTab'
 import DashboardPage from './components/dashboard/DashboardPage'
 import MemoryViewer from './components/memory/MemoryViewer'
+import SettingsPage from './components/settings/SettingsPage'
 
 function AppShell() {
   const { selectedTaskId, closeTask } = useApp()
 
   return (
-    <div className="flex flex-col h-dvh bg-[#0a0a0f] text-slate-100 overflow-hidden">
+    <div className="flex flex-col h-dvh bg-[var(--color-bg)] text-[var(--color-text)] overflow-hidden">
       <main className="flex-1 overflow-y-auto">
         <Routes>
           <Route path="/" element={<Navigate to="/projects" replace />} />
@@ -23,6 +24,7 @@ function AppShell() {
           <Route path="/ideas" element={<IdeasTab />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/memory" element={<MemoryViewer />} />
+          <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/projects" replace />} />
         </Routes>
       </main>

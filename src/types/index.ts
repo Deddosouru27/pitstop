@@ -95,3 +95,12 @@ export interface Memory {
   importance: number | null
   created_at: string
 }
+
+export type Theme = 'dark' | 'light'
+export type Language = 'ru' | 'en'
+
+export interface UserSettings {
+  theme: Theme
+  language: Language
+  notifications: boolean
+}

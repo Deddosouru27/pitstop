@@ -4,8 +4,8 @@ export default {
   theme: {
     extend: {
       colors: {
-        surface: '#13131a',
-        'surface-el': '#1c1c27',
+        surface: 'var(--color-surface)',
+        'surface-el': 'var(--color-surface-el)',
         accent: '#7c3aed',
         'accent-blue': '#2563eb',
         success: '#10b981',
