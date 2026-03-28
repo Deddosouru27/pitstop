@@ -43,6 +43,7 @@ export function useSupabaseRealtime<T extends object>(
         'postgres_changes',
         filterOpts,
         (payload: RealtimePostgresChangesPayload<T>) => {
+          console.log('realtime event:', payload.table, payload.eventType, payload.new)
           switch (payload.eventType) {
             case 'INSERT':
               handlersRef.current.onInsert?.(payload.new)
