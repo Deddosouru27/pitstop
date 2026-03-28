@@ -526,7 +526,10 @@ Format: [{"title": string, "description": string, "priority": "low"|"medium"|"hi
             )}
 
             {projectTasks.length === 0 && !quickAddOpen && (
-              <p className="text-sm text-slate-600 text-center py-4">Задач в проекте нет</p>
+              <div className="text-center py-8 space-y-1">
+                <p className="text-sm text-slate-500">Нет задач</p>
+                <p className="text-xs text-slate-600">Создай задачу или напиши /task пекарь описание в Telegram</p>
+              </div>
             )}
 
             <div className="space-y-1.5">

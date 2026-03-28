@@ -1,13 +1,23 @@
-import { Youtube, Instagram, Globe, FileText, ArrowRight, Trash2 } from 'lucide-react'
+import { ArrowRight, Trash2, Globe } from 'lucide-react'
 import type { Idea, Project } from '../../types'
 
-const INTAKE_SOURCES = new Set(['youtube', 'instagram', 'article', 'url'])
+export const INTAKE_SOURCES = new Set(['youtube', 'instagram', 'article', 'url', 'twitter', 'threads'])
 
-const SOURCE_CONFIG: Record<string, { label: string; icon: React.ElementType; color: string }> = {
-  youtube:   { label: 'YouTube',   icon: Youtube,   color: 'bg-red-900/50 text-red-400' },
-  instagram: { label: 'Instagram', icon: Instagram,  color: 'bg-pink-900/50 text-pink-400' },
-  article:   { label: 'Article',   icon: FileText,   color: 'bg-blue-900/50 text-blue-400' },
-  url:       { label: 'URL',       icon: Globe,      color: 'bg-slate-800 text-slate-400' },
+const SOURCE_CONFIG: Record<string, { label: string; emoji: string; color: string }> = {
+  youtube:   { label: 'YouTube',   emoji: '🎬', color: 'bg-red-900/50 text-red-400' },
+  instagram: { label: 'Instagram', emoji: '📸', color: 'bg-pink-900/50 text-pink-400' },
+  article:   { label: 'Статья',    emoji: '📰', color: 'bg-blue-900/50 text-blue-400' },
+  url:       { label: 'URL',       emoji: '🔗', color: 'bg-slate-800 text-slate-400' },
+  twitter:   { label: 'Twitter/X', emoji: '🐦', color: 'bg-sky-900/50 text-sky-400' },
+  threads:   { label: 'Threads',   emoji: '🧵', color: 'bg-violet-900/50 text-violet-400' },
+}
+
+const CATEGORY_COLORS: Record<string, string> = {
+  feature:   'bg-blue-900/50 text-blue-400',
+  ux:        'bg-purple-900/50 text-purple-400',
+  marketing: 'bg-amber-900/50 text-amber-400',
+  bug:       'bg-red-900/50 text-red-400',
+  other:     'bg-slate-800 text-slate-400',
 }
 
 interface Props {
@@ -39,20 +49,24 @@ export default function IntakeViewer({ ideas, projects, onConvert, onDelete }: P
       {intakeIdeas.map(idea => {
         const src = idea.source ?? 'url'
         const cfg = SOURCE_CONFIG[src] ?? SOURCE_CONFIG.url
-        const Icon = cfg.icon
         const proj = projectMap.get(idea.project_id)
+        const catColor = idea.ai_category ? (CATEGORY_COLORS[idea.ai_category] ?? CATEGORY_COLORS.other) : null
 
         return (
           <div
             key={idea.id}
             className="bg-white/5 rounded-2xl p-4 space-y-2 border border-white/[0.06]"
           >
-            {/* Source badge + date */}
-            <div className="flex items-center gap-2">
-              <span className={`flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full ${cfg.color}`}>
-                <Icon size={10} />
-                {cfg.label}
+            {/* Source badge + category + date */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${cfg.color}`}>
+                {cfg.emoji} {cfg.label}
               </span>
+              {catColor && idea.ai_category && (
+                <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${catColor}`}>
+                  {idea.ai_category.charAt(0).toUpperCase() + idea.ai_category.slice(1)}
+                </span>
+              )}
               {proj && (
                 <div className="flex items-center gap-1 text-[10px] text-slate-500">
                   <span className="w-1.5 h-1.5 rounded-full" style={{ background: proj.color }} />

@@ -150,9 +150,11 @@ export default function DashboardPage() {
           </p>
 
           {stats.recentJobs.length === 0 ? (
-            <p className="text-sm text-slate-600 text-center py-8">
-              Бот ещё не выполнял задачи
-            </p>
+            <div className="text-center py-10 space-y-1">
+              <p className="text-2xl">🤖</p>
+              <p className="text-sm text-slate-500">Бот ещё не выполнял задач</p>
+              <p className="text-xs text-slate-600">Запусти /autorun в Telegram</p>
+            </div>
           ) : (
             <div className="space-y-1.5">
               {stats.recentJobs.map(job => (

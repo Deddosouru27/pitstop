@@ -169,9 +169,16 @@ export default function MemoryViewer() {
       {/* List */}
       <div className="px-4 space-y-2 flex-1">
         {filtered.length === 0 ? (
-          <div className="flex flex-col items-center py-16 text-slate-600">
-            <Brain size={32} strokeWidth={1.5} className="mb-3 opacity-40" />
-            <p className="text-sm">Записей не найдено</p>
+          <div className="flex flex-col items-center py-16 text-center space-y-1">
+            <p className="text-3xl">🧠</p>
+            <p className="text-sm text-slate-500">
+              {memories.length === 0 ? 'Память пуста' : 'Записей не найдено'}
+            </p>
+            <p className="text-xs text-slate-600">
+              {memories.length === 0
+                ? 'Запусти /autorun чтобы система начала запоминать'
+                : 'Попробуй другой фильтр или поисковый запрос'}
+            </p>
           </div>
         ) : (
           filtered.map(m => <MemoryCard key={m.id} memory={m} />)

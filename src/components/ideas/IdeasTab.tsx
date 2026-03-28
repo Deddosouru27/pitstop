@@ -3,10 +3,8 @@ import { Lightbulb } from 'lucide-react'
 import { useAllIdeas } from '../../hooks/useAllIdeas'
 import { useApp } from '../../context/AppContext'
 import IdeaDetailModal from './IdeaDetailModal'
-import IntakeViewer from '../intake/IntakeViewer'
+import IntakeViewer, { INTAKE_SOURCES } from '../intake/IntakeViewer'
 import type { Idea } from '../../types'
-
-const INTAKE_SOURCES = new Set(['youtube', 'instagram', 'article', 'url'])
 
 const FILTERS = [
   { key: 'all',       label: 'All' },

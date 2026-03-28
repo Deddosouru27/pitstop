@@ -78,9 +78,10 @@ export default function BotActivitySection({ projectId }: Props) {
         </h2>
 
         {jobs.length === 0 ? (
-          <p className="text-sm text-slate-600 text-center py-4">
-            Бот ещё не выполнял задачи
-          </p>
+          <div className="text-center py-6 space-y-1">
+            <p className="text-sm text-slate-500">Активности нет</p>
+            <p className="text-xs text-slate-600">Запусти /autorun МАOS в Telegram чтобы бот начал работать</p>
+          </div>
         ) : (
           <div className="space-y-1.5">
             {jobs.map(job => {
