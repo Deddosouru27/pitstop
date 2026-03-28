@@ -9,18 +9,24 @@ const COLORS = [
 
 interface Props {
   onClose: () => void
-  onCreate: (input: { name: string; color: string; github_repo?: string | null }) => Promise<void>
+  onCreate: (input: { name: string; color: string; github_repo?: string | null; deploy_url?: string | null }) => Promise<void>
 }
 
 export default function CreateProjectModal({ onClose, onCreate }: Props) {
   const [name, setName] = useState('')
   const [color, setColor] = useState('#7c3aed')
   const [githubRepo, setGithubRepo] = useState('')
+  const [deployUrl, setDeployUrl] = useState('')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) return
-    await onCreate({ name: name.trim(), color, github_repo: githubRepo.trim() || null })
+    await onCreate({
+      name: name.trim(),
+      color,
+      github_repo: githubRepo.trim() || null,
+      deploy_url: deployUrl.trim() || null,
+    })
     onClose()
   }
 
@@ -58,6 +64,19 @@ export default function CreateProjectModal({ onClose, onCreate }: Props) {
             />
             <p className="text-[11px] text-slate-600 px-1">
               Используется для autorun — агент будет коммитить в этот репо
+            </p>
+          </div>
+
+          <div className="space-y-1">
+            <input
+              type="text"
+              placeholder="pitstop-dusky.vercel.app"
+              value={deployUrl}
+              onChange={e => setDeployUrl(e.target.value)}
+              className="w-full bg-surface text-slate-100 placeholder-slate-600 rounded-xl px-4 py-3 text-sm outline-none focus:ring-1 focus:ring-accent"
+            />
+            <p className="text-[11px] text-slate-600 px-1">
+              URL где задеплоен проект
             </p>
           </div>
 

@@ -12,6 +12,8 @@ export default function ProjectsTab() {
   const [showModal, setShowModal] = useState(false)
   const autorunState = useAutorunStatus()
 
+  const ASSIGNEE_ICONS: Record<string, string> = { baker: '🍞', runner: '🖥️', intake: '🔧' }
+
   const taskCounts = useMemo(() => {
     const counts: Record<string, number> = {}
     for (const task of tasks) {
@@ -20,6 +22,18 @@ export default function ProjectsTab() {
       }
     }
     return counts
+  }, [tasks])
+
+  const assigneeIcons = useMemo(() => {
+    const icons: Record<string, string[]> = {}
+    for (const task of tasks) {
+      if (!task.project_id || task.is_completed) continue
+      const key = task.assignee && ASSIGNEE_ICONS[task.assignee] ? task.assignee : null
+      if (!key) continue
+      if (!icons[task.project_id]) icons[task.project_id] = []
+      if (!icons[task.project_id].includes(key)) icons[task.project_id].push(key)
+    }
+    return icons
   }, [tasks])
 
   if (projectsLoading) {
@@ -71,6 +85,7 @@ export default function ProjectsTab() {
 
         {projects.map(project => {
           const count = taskCounts[project.id] ?? 0
+          const icons = assigneeIcons[project.id] ?? []
           return (
             <button
               key={project.id}
@@ -83,7 +98,10 @@ export default function ProjectsTab() {
                 <div className="flex-1 text-left">
                   <p className="font-semibold text-slate-100 text-sm">{project.name}</p>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    {count > 0 ? `${count} task${count !== 1 ? 's' : ''}` : 'No active tasks'}
+                    {count > 0 ? `${count} задач${count === 1 ? 'а' : count < 5 ? 'и' : ''}` : 'Нет активных задач'}
+                    {icons.length > 0 && (
+                      <span className="ml-1.5">{icons.map(k => ASSIGNEE_ICONS[k]).join('')}</span>
+                    )}
                     {project.last_session_at && (
                       <span className="ml-2 text-slate-600">
                         · {new Date(project.last_session_at).toLocaleDateString()}
