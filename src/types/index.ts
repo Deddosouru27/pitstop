@@ -84,6 +84,7 @@ export interface Idea {
   converted_to_task: boolean
   source?: string | null
   source_type?: string | null
+  extracted_ideas?: string[] | null
   created_at: string
 }
 

@@ -9,6 +9,7 @@
 
   /* Dark theme (default) */
   :root, .dark {
+    color-scheme: dark;
     --color-bg: #0a0a0f;
     --color-text: #f1f5f9;
     --color-surface: #13131a;
@@ -20,6 +21,7 @@
 
   /* Light theme */
   .light {
+    color-scheme: light;
     --color-bg: #f8f9fb;
     --color-text: #0f172a;
     --color-surface: #ffffff;

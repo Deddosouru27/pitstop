@@ -42,12 +42,24 @@ function IdeaCard({
     ? idea.ai_category.charAt(0).toUpperCase() + idea.ai_category.slice(1)
     : 'Idea'
 
+  const extractedPreview = idea.extracted_ideas?.slice(0, 2) ?? []
+
   return (
     <button
       onClick={() => onOpen(idea)}
       className="w-full text-left bg-white/5 rounded-2xl p-4 space-y-2 active:opacity-60 transition-opacity border border-white/[0.06]"
     >
       <p className="text-slate-100 text-sm leading-relaxed line-clamp-3">{idea.content}</p>
+      {extractedPreview.length > 0 && (
+        <div className="space-y-0.5">
+          {extractedPreview.map((item, i) => (
+            <p key={i} className="text-xs text-slate-500 line-clamp-1">· {item}</p>
+          ))}
+          {(idea.extracted_ideas?.length ?? 0) > 2 && (
+            <p className="text-[10px] text-slate-600">+{(idea.extracted_ideas?.length ?? 0) - 2} ещё</p>
+          )}
+        </div>
+      )}
       <div className="flex items-center gap-2">
         {idea.ai_category && (
           <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${categoryClass}`}>

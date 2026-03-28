@@ -90,6 +90,16 @@ export default function IntakeViewer({ ideas, projects, onConvert, onDelete }: P
 
             {/* Content */}
             <p className="text-slate-100 text-sm leading-relaxed">{idea.content}</p>
+            {idea.extracted_ideas && idea.extracted_ideas.length > 0 && (
+              <div className="space-y-0.5">
+                {idea.extracted_ideas.slice(0, 2).map((item, i) => (
+                  <p key={i} className="text-xs text-slate-500 line-clamp-1">· {item}</p>
+                ))}
+                {idea.extracted_ideas.length > 2 && (
+                  <p className="text-[10px] text-slate-600">+{idea.extracted_ideas.length - 2} ещё</p>
+                )}
+              </div>
+            )}
 
             {/* Actions */}
             {idea.converted_to_task ? (
