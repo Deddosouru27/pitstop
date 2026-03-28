@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Plus, Pencil, Target, ChevronLeft } from 'lucide-react'
+import { ArrowLeft, Plus, Pencil, Target, ChevronLeft, SlidersHorizontal } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
 import { useIdeas } from '../../hooks/useIdeas'
 import { callClaude } from '../../lib/anthropic'
@@ -13,6 +13,7 @@ import ContextExport from './ContextExport'
 import IdeasModal from './IdeasModal'
 import QuickAddIdeaSheet from './QuickAddIdeaSheet'
 import EditProjectModal from './EditProjectModal'
+import ProjectSettings from './ProjectSettings'
 import GoalInputSheet from './GoalInputSheet'
 import GoalPreviewSheet from './GoalPreviewSheet'
 import type { ProposedTask } from './GoalPreviewSheet'
@@ -58,6 +59,7 @@ export default function ProjectDetail() {
   const [showIdeasModal, setShowIdeasModal] = useState(false)
   const [showQuickAdd, setShowQuickAdd] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
   const [countdown, setCountdown] = useState<number | null>(null)
   const justUpdatedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [goalSheetOpen, setGoalSheetOpen] = useState(false)
@@ -393,6 +395,13 @@ Format: [{"title": string, "description": string, "priority": "low"|"medium"|"hi
         <div className="w-3 h-3 rounded-full shrink-0" style={{ background: project.color }} />
         <h1 className="flex-1 font-bold text-slate-100 truncate">{project.name}</h1>
         <button
+          onClick={() => setShowSettings(true)}
+          className="text-slate-500 hover:text-slate-300 transition-colors"
+          title="Настройки"
+        >
+          <SlidersHorizontal size={17} />
+        </button>
+        <button
           onClick={() => setShowEditModal(true)}
           className="text-slate-500 hover:text-slate-300 transition-colors"
         >
@@ -572,6 +581,14 @@ Format: [{"title": string, "description": string, "priority": "low"|"medium"|"hi
         <QuickAddIdeaSheet
           onAdd={handleAddIdea}
           onClose={() => setShowQuickAdd(false)}
+        />
+      )}
+
+      {showSettings && (
+        <ProjectSettings
+          project={project}
+          onSave={async (updates) => { await updateProject(project.id, updates) }}
+          onClose={() => setShowSettings(false)}
         />
       )}
 

@@ -35,6 +35,9 @@ export interface Project {
   name: string
   color: string
   github_repo?: string | null
+  deploy_url?: string | null
+  autorun_enabled?: boolean | null
+  dod_items?: string[] | null
   context_what: string | null
   context_where: string | null
   context_done: string | null
