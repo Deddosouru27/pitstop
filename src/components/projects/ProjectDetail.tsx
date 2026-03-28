@@ -528,7 +528,7 @@ Format: [{"title": string, "description": string, "priority": "low"|"medium"|"hi
           </div>
 
           {/* Bot activity */}
-          <BotActivitySection />
+          <BotActivitySection projectId={project.id} />
 
           {/* Ideas card */}
           {(() => {

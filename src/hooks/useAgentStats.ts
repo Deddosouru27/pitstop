@@ -27,12 +27,12 @@ export function useAgentStats() {
       const [statsRes, recentRes] = await Promise.all([
         supabase
           .from('agent_jobs')
-          .select('id, type, status, result, created_at, updated_at')
+          .select('id, type, status, project_id, result, created_at, updated_at')
           .gte('created_at', since14)
           .order('created_at', { ascending: false }),
         supabase
           .from('agent_jobs')
-          .select('id, type, status, result, created_at, updated_at')
+          .select('id, type, status, project_id, result, created_at, updated_at')
           .order('created_at', { ascending: false })
           .limit(10),
       ])

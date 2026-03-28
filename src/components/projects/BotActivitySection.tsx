@@ -1,5 +1,9 @@
 import { useAgentJobs } from '../../hooks/useAgentJobs'
 
+interface Props {
+  projectId: string
+}
+
 function formatDuration(startIso: string, endIso: string): string {
   const ms = new Date(endIso).getTime() - new Date(startIso).getTime()
   if (ms < 1000) return '<1с'
@@ -7,8 +11,8 @@ function formatDuration(startIso: string, endIso: string): string {
   return `${Math.round(ms / 60000)}м`
 }
 
-export default function BotActivitySection() {
-  const { jobs, loading } = useAgentJobs()
+export default function BotActivitySection({ projectId }: Props) {
+  const { jobs, loading } = useAgentJobs(projectId)
 
   if (loading) return null
 
