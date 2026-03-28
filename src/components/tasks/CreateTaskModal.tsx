@@ -9,7 +9,7 @@ interface Props {
   projects: Project[]
   recentIdeas?: { content: string }[]
   onClose: () => void
-  onCreate: (input: { title: string; priority: Priority; due_date: string | null; project_id: string | null }) => Promise<void>
+  onCreate: (input: { title: string; description?: string | null; priority: Priority; due_date: string | null; project_id: string | null }) => Promise<void>
 }
 
 const PRIORITIES: { value: Priority; label: string; activeClass: string }[] = [
@@ -25,6 +25,7 @@ export default function CreateTaskModal({ projects, recentIdeas = [], onClose, o
   useEffect(() => { tasksRef.current = tasks }, [tasks])
 
   const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
   const [priority, setPriority] = useState<Priority>('none')
   const [isAutoInferred, setIsAutoInferred] = useState(false)
   const [dueDate, setDueDate] = useState('')
@@ -72,6 +73,7 @@ export default function CreateTaskModal({ projects, recentIdeas = [], onClose, o
     if (!title.trim()) return
     await onCreate({
       title: title.trim(),
+      description: description.trim() || null,
       priority,
       due_date: dueDate || null,
       project_id: projectId || null,
@@ -102,6 +104,21 @@ export default function CreateTaskModal({ projects, recentIdeas = [], onClose, o
             onChange={e => setTitle(e.target.value)}
             className="w-full bg-surface text-slate-100 placeholder-slate-600 rounded-xl px-4 py-3 text-sm outline-none focus:ring-1 focus:ring-accent"
           />
+
+          <div className="space-y-1">
+            <textarea
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              placeholder="Опиши задачу для агента: что сделать, в каком репо, ожидаемый результат"
+              rows={3}
+              className="w-full bg-surface text-slate-100 placeholder-slate-600 rounded-xl px-4 py-3 text-sm outline-none focus:ring-1 focus:ring-accent resize-none"
+            />
+            {!description.trim() && (
+              <p className="text-[11px] text-slate-600 px-1">
+                Без описания — autorun пропустит задачу
+              </p>
+            )}
+          </div>
 
           {/* Priority chips */}
           <div className="space-y-1.5">

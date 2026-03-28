@@ -16,6 +16,7 @@ import EditProjectModal from './EditProjectModal'
 import GoalInputSheet from './GoalInputSheet'
 import GoalPreviewSheet from './GoalPreviewSheet'
 import type { ProposedTask } from './GoalPreviewSheet'
+import BotActivitySection from './BotActivitySection'
 import TaskItem from '../tasks/TaskItem'
 import type { Idea, Task } from '../../types'
 
@@ -525,6 +526,9 @@ Format: [{"title": string, "description": string, "priority": "low"|"medium"|"hi
               </div>
             )}
           </div>
+
+          {/* Bot activity */}
+          <BotActivitySection />
 
           {/* Ideas card */}
           {(() => {

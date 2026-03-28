@@ -102,14 +102,21 @@ export default function TaskDetail({ taskId, onClose }: Props) {
           />
 
           {/* Description */}
-          <textarea
-            value={description}
-            onChange={e => setDescription(e.target.value)}
-            onBlur={() => save()}
-            placeholder="Add a note..."
-            rows={2}
-            className="w-full bg-surface text-slate-100 placeholder-slate-600 rounded-xl px-4 py-3 text-sm outline-none focus:ring-1 focus:ring-accent resize-none"
-          />
+          <div className="space-y-1">
+            <textarea
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              onBlur={() => save()}
+              placeholder="Опиши задачу для агента: что сделать, в каком репо, ожидаемый результат"
+              rows={3}
+              className="w-full bg-surface text-slate-100 placeholder-slate-600 rounded-xl px-4 py-3 text-sm outline-none focus:ring-1 focus:ring-accent resize-none"
+            />
+            {!description.trim() && (
+              <p className="text-[11px] text-slate-600 px-1">
+                Без описания — autorun пропустит задачу
+              </p>
+            )}
+          </div>
 
           {/* Priority chips */}
           <div className="space-y-1.5">
