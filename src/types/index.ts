@@ -77,5 +77,15 @@ export interface Idea {
   category: string
   ai_category: string
   converted_to_task: boolean
+  source?: string | null
+  created_at: string
+}
+
+export interface Memory {
+  id: string
+  content: string
+  source: string | null
+  tags: string[] | null
+  importance: number | null
   created_at: string
 }

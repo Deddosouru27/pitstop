@@ -7,6 +7,7 @@ import ProjectDetail from './components/projects/ProjectDetail'
 import CalendarTab from './components/calendar/CalendarTab'
 import IdeasTab from './components/ideas/IdeasTab'
 import DashboardPage from './components/dashboard/DashboardPage'
+import MemoryViewer from './components/memory/MemoryViewer'
 
 function AppShell() {
   const { selectedTaskId, closeTask } = useApp()
@@ -21,6 +22,7 @@ function AppShell() {
           <Route path="/calendar" element={<CalendarTab />} />
           <Route path="/ideas" element={<IdeasTab />} />
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/memory" element={<MemoryViewer />} />
           <Route path="*" element={<Navigate to="/projects" replace />} />
         </Routes>
       </main>
