@@ -44,7 +44,7 @@ export interface TelegramUpdate {
   }
 }
 
-export type TelegramCommand = 'autorun' | 'stop' | 'status' | 'ping' | 'jobs' | 'unknown'
+export type TelegramCommand = 'autorun' | 'stop' | 'status' | 'ping' | 'jobs' | 'remind' | 'unknown'
 
 interface ParsedCommand {
   command: TelegramCommand
@@ -73,6 +73,9 @@ function parseTelegramCommand(update: TelegramUpdate): ParsedCommand | null {
   }
   if (text.startsWith('/jobs')) {
     return { command: 'jobs', chatId, args: text.slice('/jobs'.length).trim() }
+  }
+  if (text.startsWith('/remind')) {
+    return { command: 'remind', chatId, args: text.slice('/remind'.length).trim() }
   }
 
   return null
@@ -248,6 +251,45 @@ async function handleJobsCommand(_chatId: number, _args: string): Promise<void> 
   await sendTelegramMessage(header + lines.join('\n'))
 }
 
+async function handleRemindCommand(chatId: number, args: string): Promise<void> {
+  const match = args.match(/^(\d+)\s+(.+)$/s)
+
+  if (!match) {
+    await sendTelegramMessage(
+      '⚠️ Формат: <code>/remind N текст</code>\n' +
+      'N — через сколько минут напомнить\n' +
+      'Пример: <code>/remind 30 проверить деплой</code>'
+    )
+    return
+  }
+
+  const minutes = parseInt(match[1], 10)
+  const text = match[2].trim()
+
+  if (minutes < 1 || minutes > 1440) {
+    await sendTelegramMessage('⚠️ Укажи от 1 до 1440 минут (24 часа).')
+    return
+  }
+
+  const fireAt = new Date(Date.now() + minutes * 60_000)
+  const fireAtStr = formatTimestamp(fireAt)
+
+  await sendTelegramMessage(
+    `⏰ Напоминание установлено!\n` +
+    `📝 ${escapeHtml(text)}\n` +
+    `🕐 Сработает через ${minutes} мин (${fireAtStr})`
+  )
+
+  setTimeout(() => {
+    void sendTelegramMessage(
+      `🔔 <b>Напоминание!</b>\n` +
+      `📝 ${escapeHtml(text)}`
+    )
+  }, minutes * 60_000)
+
+  console.log(`[telegram] Reminder set: ${minutes}min — "${text}"`)
+}
+
 function getDurationMs(job: { status: string; created_at: string; updated_at: string; result: Record<string, unknown> | null }): number {
   // Prefer duration_ms from result if available
   if (job.result && typeof job.result['duration_ms'] === 'number') {
@@ -317,6 +359,9 @@ export async function startTelegramPolling(): Promise<void> {
             break
           case 'jobs':
             await handleJobsCommand(parsed.chatId, parsed.args)
+            break
+          case 'remind':
+            await handleRemindCommand(parsed.chatId, parsed.args)
             break
           default:
             break
