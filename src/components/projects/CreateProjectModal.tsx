@@ -9,17 +9,18 @@ const COLORS = [
 
 interface Props {
   onClose: () => void
-  onCreate: (input: { name: string; color: string }) => Promise<void>
+  onCreate: (input: { name: string; color: string; github_repo?: string | null }) => Promise<void>
 }
 
 export default function CreateProjectModal({ onClose, onCreate }: Props) {
   const [name, setName] = useState('')
   const [color, setColor] = useState('#7c3aed')
+  const [githubRepo, setGithubRepo] = useState('')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) return
-    await onCreate({ name: name.trim(), color })
+    await onCreate({ name: name.trim(), color, github_repo: githubRepo.trim() || null })
     onClose()
   }
 
@@ -46,6 +47,19 @@ export default function CreateProjectModal({ onClose, onCreate }: Props) {
             onChange={e => setName(e.target.value)}
             className="w-full bg-surface text-slate-100 placeholder-slate-600 rounded-xl px-4 py-3 text-sm outline-none focus:ring-1 focus:ring-accent"
           />
+
+          <div className="space-y-1">
+            <input
+              type="text"
+              placeholder="Deddosouru27/pitstop"
+              value={githubRepo}
+              onChange={e => setGithubRepo(e.target.value)}
+              className="w-full bg-surface text-slate-100 placeholder-slate-600 rounded-xl px-4 py-3 text-sm outline-none focus:ring-1 focus:ring-accent"
+            />
+            <p className="text-[11px] text-slate-600 px-1">
+              Используется для autorun — агент будет коммитить в этот репо
+            </p>
+          </div>
 
           <div className="space-y-2">
             <label className="text-xs text-slate-500">Color</label>

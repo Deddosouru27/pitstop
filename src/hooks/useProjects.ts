@@ -48,7 +48,7 @@ export function useProjects() {
     },
   })
 
-  const createProject = useCallback(async (input: Pick<Project, 'name' | 'color'>): Promise<Project | null> => {
+  const createProject = useCallback(async (input: Pick<Project, 'name' | 'color' | 'github_repo'>): Promise<Project | null> => {
     const { data } = await supabase
       .from('projects')
       .insert(input)

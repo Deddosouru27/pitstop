@@ -54,7 +54,7 @@ async function buildHandoffText(project: Project, activeTasks: Task[], ideas: Id
 
   return [
     `# Handoff: ${project.name}`,
-    '',
+    ...(project.github_repo ? [`Репо: ${project.github_repo}`, ''] : ['']),
     '## Следующий шаг',
     project.ai_next_step || '_не определён_',
     '',

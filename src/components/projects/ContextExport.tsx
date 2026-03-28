@@ -59,6 +59,7 @@ async function buildMarkdown(project: Project, activeTasks: Task[], ideas: Idea[
   return [
     `# Контекст проекта: ${project.name}`,
     `Обновлено: ${now}`,
+    ...(project.github_repo ? [`Репо: ${project.github_repo}`] : []),
     '',
     '## Текущее состояние',
     `**Что сделано:** ${project.ai_what_done || '_не заполнено_'}`,

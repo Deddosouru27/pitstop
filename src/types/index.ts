@@ -34,6 +34,7 @@ export interface Project {
   id: string
   name: string
   color: string
+  github_repo?: string | null
   context_what: string | null
   context_where: string | null
   context_done: string | null

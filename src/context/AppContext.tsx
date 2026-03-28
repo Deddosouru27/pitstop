@@ -13,7 +13,7 @@ interface AppContextType {
   deleteTask: (id: string) => Promise<void>
   projects: Project[]
   projectsLoading: boolean
-  createProject: (input: Pick<Project, 'name' | 'color'>) => Promise<Project | null>
+  createProject: (input: Pick<Project, 'name' | 'color' | 'github_repo'>) => Promise<Project | null>
   updateProject: (id: string, updates: Partial<Project>) => Promise<Project | null>
   deleteProject: (id: string) => Promise<void>
   selectedTaskId: string | null

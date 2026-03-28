@@ -10,7 +10,7 @@ const COLORS = [
 
 interface Props {
   project: Project
-  onSave: (updates: { name: string; color: string }) => Promise<void>
+  onSave: (updates: { name: string; color: string; github_repo?: string | null }) => Promise<void>
   onDelete: () => Promise<void>
   onClose: () => void
 }
@@ -18,6 +18,7 @@ interface Props {
 export default function EditProjectModal({ project, onSave, onDelete, onClose }: Props) {
   const [name, setName] = useState(project.name)
   const [color, setColor] = useState(project.color)
+  const [githubRepo, setGithubRepo] = useState(project.github_repo ?? '')
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -26,7 +27,7 @@ export default function EditProjectModal({ project, onSave, onDelete, onClose }:
     e.preventDefault()
     if (!name.trim()) return
     setSaving(true)
-    await onSave({ name: name.trim(), color })
+    await onSave({ name: name.trim(), color, github_repo: githubRepo.trim() || null })
     onClose()
   }
 
@@ -62,6 +63,21 @@ export default function EditProjectModal({ project, onSave, onDelete, onClose }:
               onChange={e => setName(e.target.value)}
               className="w-full bg-surface text-slate-100 placeholder-slate-600 rounded-xl px-4 py-3 text-sm outline-none focus:ring-1 focus:ring-accent"
             />
+          </div>
+
+          {/* GitHub repo */}
+          <div className="space-y-1.5">
+            <label className="text-xs text-slate-500">GitHub репо</label>
+            <input
+              type="text"
+              value={githubRepo}
+              onChange={e => setGithubRepo(e.target.value)}
+              placeholder="Deddosouru27/pitstop"
+              className="w-full bg-surface text-slate-100 placeholder-slate-600 rounded-xl px-4 py-3 text-sm outline-none focus:ring-1 focus:ring-accent"
+            />
+            <p className="text-[11px] text-slate-600 px-1">
+              Используется для autorun — агент будет коммитить в этот репо
+            </p>
           </div>
 
           {/* Color */}
