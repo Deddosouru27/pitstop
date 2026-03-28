@@ -1,16 +1,20 @@
 import { ArrowRight, Trash2, Globe } from 'lucide-react'
 import type { Idea, Project } from '../../types'
 
-export const INTAKE_SOURCES = new Set(['youtube', 'instagram', 'article', 'url', 'twitter', 'threads', 'thread'])
+export const INTAKE_SOURCES = new Set([
+  'youtube', 'instagram', 'article', 'url', 'twitter', 'threads', 'thread',
+  'video', 'research', 'text',
+])
 
 /** Returns the effective source value checking both source_type and source fields */
 export function getIdeaSource(idea: { source?: string | null; source_type?: string | null }): string | null {
   return idea.source_type ?? idea.source ?? null
 }
 
+/** An idea is from Intake if source_type is set (any value), or source matches known intake values */
 export function isIntakeIdea(idea: { source?: string | null; source_type?: string | null }): boolean {
-  const src = getIdeaSource(idea)
-  return src != null && INTAKE_SOURCES.has(src)
+  if (idea.source_type != null) return true
+  return idea.source != null && INTAKE_SOURCES.has(idea.source)
 }
 
 const SOURCE_CONFIG: Record<string, { label: string; emoji: string; color: string }> = {
@@ -20,6 +24,10 @@ const SOURCE_CONFIG: Record<string, { label: string; emoji: string; color: strin
   url:       { label: 'URL',       emoji: '🔗', color: 'bg-slate-800 text-slate-400' },
   twitter:   { label: 'Twitter/X', emoji: '🐦', color: 'bg-sky-900/50 text-sky-400' },
   threads:   { label: 'Threads',   emoji: '🧵', color: 'bg-violet-900/50 text-violet-400' },
+  thread:    { label: 'Thread',    emoji: '🧵', color: 'bg-violet-900/50 text-violet-400' },
+  video:     { label: 'Видео',     emoji: '📹', color: 'bg-red-900/50 text-red-400' },
+  research:  { label: 'Research',  emoji: '🔬', color: 'bg-emerald-900/50 text-emerald-400' },
+  text:      { label: 'Текст',     emoji: '📝', color: 'bg-slate-800 text-slate-400' },
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -58,7 +66,7 @@ export default function IntakeViewer({ ideas, projects, onConvert, onDelete }: P
     <div className="space-y-2">
       {intakeIdeas.map(idea => {
         const src = getIdeaSource(idea) ?? 'url'
-        const cfg = SOURCE_CONFIG[src] ?? SOURCE_CONFIG.url
+        const cfg = SOURCE_CONFIG[src] ?? { label: src, emoji: '🔗', color: 'bg-slate-800 text-slate-400' }
         const proj = projectMap.get(idea.project_id)
         const catColor = idea.ai_category ? (CATEGORY_COLORS[idea.ai_category] ?? CATEGORY_COLORS.other) : null
 
