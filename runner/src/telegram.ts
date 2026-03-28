@@ -44,7 +44,7 @@ export interface TelegramUpdate {
   }
 }
 
-export type TelegramCommand = 'autorun' | 'stop' | 'status' | 'ping' | 'unknown'
+export type TelegramCommand = 'autorun' | 'stop' | 'status' | 'ping' | 'jobs' | 'unknown'
 
 interface ParsedCommand {
   command: TelegramCommand
@@ -70,6 +70,9 @@ function parseTelegramCommand(update: TelegramUpdate): ParsedCommand | null {
   }
   if (text.startsWith('/ping')) {
     return { command: 'ping', chatId, args: text.slice('/ping'.length).trim() }
+  }
+  if (text.startsWith('/jobs')) {
+    return { command: 'jobs', chatId, args: text.slice('/jobs'.length).trim() }
   }
 
   return null
@@ -214,6 +217,48 @@ async function handlePingCommand(_chatId: number, _args: string): Promise<void> 
   )
 }
 
+async function handleJobsCommand(_chatId: number, _args: string): Promise<void> {
+  const { data: jobs, error } = await supabase
+    .from('agent_jobs')
+    .select('type, status, created_at, updated_at, result')
+    .order('created_at', { ascending: false })
+    .limit(10)
+
+  if (error) {
+    await sendTelegramMessage(`❌ Ошибка запроса: ${error.message}`)
+    return
+  }
+
+  if (!jobs || jobs.length === 0) {
+    await sendTelegramMessage('ℹ️ Нет записей в agent_jobs.')
+    return
+  }
+
+  const lines = jobs.map((job) => {
+    const icon = job.status === 'completed' ? '✅' : job.status === 'running' ? '🔄' : job.status === 'pending' ? '⏳' : '❌'
+    const createdAt = new Date(job.created_at)
+    const durationMs = getDurationMs(job)
+    const durationSec = Math.round(durationMs / 1000)
+    const dateStr = formatTimestamp(createdAt)
+
+    return `${icon} <b>${job.type}</b> — ${durationSec}с — ${dateStr}`
+  })
+
+  const header = `📋 <b>Последние ${jobs.length} jobs:</b>\n`
+  await sendTelegramMessage(header + lines.join('\n'))
+}
+
+function getDurationMs(job: { status: string; created_at: string; updated_at: string; result: Record<string, unknown> | null }): number {
+  // Prefer duration_ms from result if available
+  if (job.result && typeof job.result['duration_ms'] === 'number') {
+    return job.result['duration_ms']
+  }
+  // Fallback: difference between updated_at and created_at
+  const created = new Date(job.created_at).getTime()
+  const updated = new Date(job.updated_at).getTime()
+  return updated - created
+}
+
 // --- Polling loop ---
 
 export async function startTelegramPolling(): Promise<void> {
@@ -269,6 +314,9 @@ export async function startTelegramPolling(): Promise<void> {
             break
           case 'ping':
             await handlePingCommand(parsed.chatId, parsed.args)
+            break
+          case 'jobs':
+            await handleJobsCommand(parsed.chatId, parsed.args)
             break
           default:
             break
