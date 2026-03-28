@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react'
 import { Copy, Check, ChevronRight, Sparkles, Loader2 } from 'lucide-react'
 import { getSnapshots, formatSnapshotFull } from '../../hooks/useContextSnapshots'
-import type { AiSummaryContent } from '../../hooks/useContextSnapshots'
 import type { Project, Task, Idea } from '../../types'
 
 interface Props {
@@ -22,57 +21,116 @@ const PRIORITY_ORDER: Record<string, number> = {
   none: 3,
 }
 
+/** Extract checklist items from free-form description text.
+ *  Looks for lines starting with "- ", "• ", digits, or keywords like "проверить/check/тест".
+ *  Falls back to generic test checklist. */
+function extractTestChecklist(description: string | null): string {
+  if (!description?.trim()) {
+    return [
+      '- [ ] Позитивный сценарий работает',
+      '- [ ] Ошибочный ввод / граничные случаи не ломают приложение',
+      '- [ ] npm run build ✅ 0 ошибок TypeScript',
+    ].join('\n')
+  }
+
+  const lines = description
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => l.length > 5)
+
+  // Lines that look like checklist items or test scenarios
+  const checkLines = lines.filter(l =>
+    /^[-•*\d]/.test(l) ||
+    /проверить|check|тест|негат|ошибк|edge|fail|должен|must/i.test(l)
+  )
+
+  const items = (checkLines.length > 0 ? checkLines : lines.slice(0, 3))
+    .slice(0, 6)
+    .map(l => `- [ ] ${l.replace(/^[-•*\d.)\s]+/, '')}`)
+
+  return [
+    ...items,
+    '- [ ] npm run build ✅ 0 ошибок TypeScript',
+    '- [ ] Коммит с описанием изменений',
+  ].join('\n')
+}
+
 async function buildHandoffText(project: Project, activeTasks: Task[], ideas: Idea[]): Promise<string> {
   const snapshots = await getSnapshots(project.id)
-
-  const summarySnapshots = snapshots
-    .filter(s => s.snapshot_type === 'ai_summary')
-    .slice(0, 3)
-
-  const allSentences = new Set<string>()
-  for (const s of summarySnapshots) {
-    const c = s.content as AiSummaryContent
-    c.what_done
-      .split(/[.!?]+/)
-      .map(str => str.trim())
-      .filter(str => str.length > 10)
-      .forEach(str => allSentences.add(str))
-  }
 
   const historyLines = snapshots
     .map(s => formatSnapshotFull(s))
     .filter(line => line.length > 0)
 
-  const taskLines = activeTasks.length > 0
-    ? activeTasks.map(t => `- ${t.title} (приоритет: ${t.priority}${t.due_date ? `, срок: ${t.due_date}` : ''})`).join('\n')
-    : '_Нет активных задач_'
+  // Primary task = highest priority active task
+  const [primaryTask, ...otherTasks] = activeTasks
+
+  // Task block builder
+  const taskBlock = (t: Task): string => [
+    `**${t.title}**`,
+    `Приоритет: ${t.priority}${t.due_date ? ` · Срок: ${t.due_date}` : ''}${t.status ? ` · Статус: ${t.status}` : ''}`,
+    ...(t.description ? ['', t.description] : []),
+  ].join('\n')
+
+  const otherTaskLines = otherTasks.length > 0
+    ? otherTasks.map(t => `- ${t.title} (${t.priority})`).join('\n')
+    : '_Нет дополнительных задач_'
 
   const visibleIdeas = ideas.filter(i => !i.converted_to_task)
   const ideaLines = visibleIdeas.length > 0
     ? visibleIdeas.map(i => `- ${i.content}`).join('\n')
     : '_Нет идей_'
 
-  return [
-    `# Handoff: ${project.name}`,
-    ...(project.github_repo ? [`Репо: ${project.github_repo}`, ''] : ['']),
-    '## Следующий шаг',
-    project.ai_next_step || '_не определён_',
+  // Expected outcome: first non-empty of task description summary or ai_next_step
+  const expectedOutcome = primaryTask?.description
+    ? primaryTask.description.split('\n')[0]
+    : (project.ai_next_step || '_не определён_')
+
+  const sections: string[] = [
+    `# Work Package: ${project.name}`,
     '',
-    '## Где остановились',
-    project.ai_where_stopped || '_не заполнено_',
+  ]
+
+  if (project.github_repo) {
+    sections.push(`**Репо:** \`${project.github_repo}\``, '')
+  }
+
+  sections.push(
+    '## Контекст проекта',
+    `**Что сделано:** ${project.ai_what_done || '_не заполнено_'}`,
+    `**Где остановились:** ${project.ai_where_stopped || '_не заполнено_'}`,
     '',
-    '## Что сделано',
-    project.ai_what_done || '_не заполнено_',
+    '## Задача',
+    primaryTask ? taskBlock(primaryTask) : '_Нет активных задач_',
     '',
-    '## Активные задачи',
-    taskLines,
+    '## Ожидаемый результат',
+    expectedOutcome,
+    '',
+    '## Правила',
+    '- Полный рабочий код, без TODO, заглушек, placeholder',
+    '- TypeScript strict: никаких any',
+    '- npm run build ✅ до коммита',
+    '- Коммит с описанием что сделано и почему',
+    '- Не ломать существующий функционал',
+    '',
+    '## Тест-чеклист',
+    extractTestChecklist(primaryTask?.description ?? null),
+  )
+
+  if (otherTasks.length > 0) {
+    sections.push('', '## Остальные задачи', otherTaskLines)
+  }
+
+  sections.push(
     '',
     '## Идеи',
     ideaLines,
     '',
     '## История',
-    historyLines.length > 0 ? historyLines.join('\n') : '_История пуста_',
-  ].join('\n')
+    historyLines.length > 0 ? historyLines.slice(0, 10).join('\n') : '_История пуста_',
+  )
+
+  return sections.join('\n')
 }
 
 export default function FocusView({
