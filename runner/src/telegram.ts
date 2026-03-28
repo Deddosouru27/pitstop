@@ -143,7 +143,19 @@ async function handleStopCommand(_chatId: number, _args: string): Promise<void> 
   await sendTelegramMessage(`🛑 Autorun остановлен (job: ${jobId})`)
 }
 
+function formatTimestamp(date: Date): string {
+  const pad = (n: number): string => String(n).padStart(2, '0')
+  const day = pad(date.getDate())
+  const month = pad(date.getMonth() + 1)
+  const hours = pad(date.getHours())
+  const minutes = pad(date.getMinutes())
+  return `${day}.${month} ${hours}:${minutes} UTC`
+}
+
 async function handleStatusCommand(_chatId: number, _args: string): Promise<void> {
+  const now = new Date()
+  const timestamp = formatTimestamp(now)
+
   const { data: runningJobs } = await supabase
     .from('agent_jobs')
     .select('id, status, created_at, result')
@@ -159,12 +171,16 @@ async function handleStatusCommand(_chatId: number, _args: string): Promise<void
       .select('id', { count: 'exact', head: true })
       .in('status', ['backlog', 'todo'])
 
-    await sendTelegramMessage(`ℹ️ Autorun не запущен.\n📋 Задач в очереди: ${count ?? 0}`)
+    await sendTelegramMessage(
+      `ℹ️ Autorun не запущен.\n` +
+      `📋 Задач в очереди: ${count ?? 0}\n` +
+      `🕐 ${timestamp}`
+    )
     return
   }
 
   const job = runningJobs[0]
-  const elapsed = Math.round((Date.now() - new Date(job.created_at).getTime()) / 60000)
+  const elapsed = Math.round((now.getTime() - new Date(job.created_at).getTime()) / 60000)
 
   const { count } = await supabase
     .from('tasks')
@@ -175,7 +191,8 @@ async function handleStatusCommand(_chatId: number, _args: string): Promise<void
     `🔄 Autorun: <b>${job.status}</b>\n` +
     `🆔 Job: ${job.id}\n` +
     `⏱ Работает: ${elapsed} мин\n` +
-    `📋 Задач в очереди: ${count ?? 0}`
+    `📋 Задач в очереди: ${count ?? 0}\n` +
+    `🕐 ${timestamp}`
   )
 }
 
