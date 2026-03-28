@@ -8,6 +8,12 @@ const PRIORITY_DOT: Record<string, string> = {
   high: 'bg-[#ef4444]',
 }
 
+const ASSIGNEE_BADGE: Record<string, string> = {
+  baker: '🍞',
+  runner: '🖥️',
+  intake: '🔧',
+}
+
 const STATUS_DOT: Record<TaskStatus, { color: string; label: string }> = {
   backlog: { color: 'bg-slate-500', label: 'Backlog' },
   todo: { color: 'bg-blue-500', label: 'To Do' },
@@ -63,8 +69,13 @@ const TaskItem = memo(function TaskItem({ task, project, onToggle, onOpen }: Pro
         </span>
       </div>
 
-      {/* Right: status + priority + due date */}
+      {/* Right: assignee + status + priority + due date */}
       <div className="flex items-center gap-2 shrink-0">
+        {task.assignee && ASSIGNEE_BADGE[task.assignee] && !task.is_completed && (
+          <span className="text-sm" title={task.assignee}>
+            {ASSIGNEE_BADGE[task.assignee]}
+          </span>
+        )}
         {task.status && !task.is_completed && STATUS_DOT[task.status] && (
           <span
             className={`w-2.5 h-2.5 rounded-full ${STATUS_DOT[task.status].color}`}

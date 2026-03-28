@@ -95,6 +95,7 @@ export default function ProjectDetail() {
   )
   const completedTasks = useMemo(() => projectTasks.filter(t => t.is_completed), [projectTasks])
   const [showDone, setShowDone] = useState(false)
+  const [assigneeFilter, setAssigneeFilter] = useState<'all' | 'baker' | 'runner' | 'intake' | 'bot'>('all')
 
   // Keep always-current refs for use inside the batcher callback
   const activeTasksRef = useRef(activeTasks)
@@ -461,6 +462,31 @@ Format: [{"title": string, "description": string, "priority": "low"|"medium"|"hi
               </button>
             </div>
 
+            {/* Assignee filter chips */}
+            {activeTasks.length > 0 && (
+              <div className="flex gap-1.5 flex-wrap">
+                {([
+                  { value: 'all', label: 'Все' },
+                  { value: 'baker', label: '🍞 Пекарь' },
+                  { value: 'runner', label: '🖥️ Ноут' },
+                  { value: 'intake', label: '🔧 Интакер' },
+                  { value: 'bot', label: '📥 От бота' },
+                ] as const).map(f => (
+                  <button
+                    key={f.value}
+                    onClick={() => setAssigneeFilter(f.value)}
+                    className={`text-xs px-3 py-1.5 rounded-xl transition-colors font-medium ${
+                      assigneeFilter === f.value
+                        ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                        : 'bg-white/5 text-slate-500 border border-white/[0.06]'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {quickAddOpen && (
               <div className="bg-surface rounded-2xl p-4 space-y-3">
                 <input
@@ -504,15 +530,21 @@ Format: [{"title": string, "description": string, "priority": "low"|"medium"|"hi
             )}
 
             <div className="space-y-1.5">
-              {activeTasks.map(task => (
-                <TaskItem
-                  key={task.id}
-                  task={task}
-                  project={project}
-                  onToggle={handleToggleTask}
-                  onOpen={openTask}
-                />
-              ))}
+              {activeTasks
+                .filter(t => {
+                  if (assigneeFilter === 'all') return true
+                  if (assigneeFilter === 'bot') return t.created_by === 'bot'
+                  return t.assignee === assigneeFilter
+                })
+                .map(task => (
+                  <TaskItem
+                    key={task.id}
+                    task={task}
+                    project={project}
+                    onToggle={handleToggleTask}
+                    onOpen={openTask}
+                  />
+                ))}
             </div>
 
             {completedTasks.length > 0 && (
