@@ -1,8 +1,9 @@
 import { NavLink } from 'react-router-dom'
-import { FolderOpen } from 'lucide-react'
+import { FolderOpen, Lightbulb } from 'lucide-react'
 
 const tabs = [
   { to: '/projects', icon: FolderOpen, label: 'Projects', end: false },
+  { to: '/ideas',    icon: Lightbulb,  label: 'Ideas',    end: false },
 ]
 
 export default function BottomNav() {

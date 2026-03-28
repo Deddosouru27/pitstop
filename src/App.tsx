@@ -5,6 +5,7 @@ import TaskDetail from './components/tasks/TaskDetail'
 import ProjectsTab from './components/projects/ProjectsTab'
 import ProjectDetail from './components/projects/ProjectDetail'
 import CalendarTab from './components/calendar/CalendarTab'
+import IdeasTab from './components/ideas/IdeasTab'
 
 function AppShell() {
   const { selectedTaskId, closeTask } = useApp()
@@ -17,6 +18,7 @@ function AppShell() {
           <Route path="/projects" element={<ProjectsTab />} />
           <Route path="/projects/:id" element={<ProjectDetail />} />
           <Route path="/calendar" element={<CalendarTab />} />
+          <Route path="/ideas" element={<IdeasTab />} />
           <Route path="*" element={<Navigate to="/projects" replace />} />
         </Routes>
       </main>
