@@ -3,10 +3,14 @@ import { Lightbulb } from 'lucide-react'
 import { useAllIdeas } from '../../hooks/useAllIdeas'
 import { useApp } from '../../context/AppContext'
 import IdeaDetailModal from './IdeaDetailModal'
+import IntakeViewer from '../intake/IntakeViewer'
 import type { Idea } from '../../types'
+
+const INTAKE_SOURCES = new Set(['youtube', 'instagram', 'article', 'url'])
 
 const FILTERS = [
   { key: 'all',       label: 'All' },
+  { key: 'intake',    label: 'Из Intake' },
   { key: 'feature',   label: 'Feature' },
   { key: 'ux',        label: 'UX' },
   { key: 'marketing', label: 'Marketing' },
@@ -84,6 +88,7 @@ export default function IdeasTab() {
 
   const filtered = useMemo(() => {
     if (filter === 'all') return ideas
+    if (filter === 'intake') return ideas.filter(i => i.source && INTAKE_SOURCES.has(i.source))
     return ideas.filter(i => i.ai_category === filter)
   }, [ideas, filter])
 
@@ -122,26 +127,37 @@ export default function IdeasTab() {
 
       {/* Ideas list */}
       <div className="px-4 space-y-2 flex-1">
-        {filtered.length === 0 && (
-          <div className="flex flex-col items-center py-16 text-slate-600">
-            <Lightbulb size={32} strokeWidth={1.5} className="mb-3 opacity-40" />
-            <p className="text-sm">No ideas yet</p>
-            <p className="text-xs mt-1">Ideas captured from projects appear here</p>
-          </div>
-        )}
+        {filter === 'intake' ? (
+          <IntakeViewer
+            ideas={filtered}
+            projects={projects}
+            onConvert={markConverted}
+            onDelete={deleteIdea}
+          />
+        ) : (
+          <>
+            {filtered.length === 0 && (
+              <div className="flex flex-col items-center py-16 text-slate-600">
+                <Lightbulb size={32} strokeWidth={1.5} className="mb-3 opacity-40" />
+                <p className="text-sm">No ideas yet</p>
+                <p className="text-xs mt-1">Ideas captured from projects appear here</p>
+              </div>
+            )}
 
-        {filtered.map(idea => {
-          const proj = projectMap.get(idea.project_id)
-          return (
-            <IdeaCard
-              key={idea.id}
-              idea={idea}
-              projectName={proj?.name}
-              projectColor={proj?.color}
-              onOpen={setSelectedIdea}
-            />
-          )
-        })}
+            {filtered.map(idea => {
+              const proj = projectMap.get(idea.project_id)
+              return (
+                <IdeaCard
+                  key={idea.id}
+                  idea={idea}
+                  projectName={proj?.name}
+                  projectColor={proj?.color}
+                  onOpen={setSelectedIdea}
+                />
+              )
+            })}
+          </>
+        )}
       </div>
 
       {/* Detail modal */}
