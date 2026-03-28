@@ -51,7 +51,7 @@ function IdeaRow({ idea, onConvert, onDelete }: IdeaRowProps) {
 
   return (
     <div className="bg-[#1c1c27] rounded-2xl px-4 py-3 space-y-2">
-      <p className="text-sm text-slate-100 leading-relaxed">{idea.content}</p>
+      <p className="text-sm text-slate-100 leading-relaxed line-clamp-2">{idea.content}</p>
       <div className="flex items-center gap-2">
         {isCategorizing ? (
           <span className="flex items-center gap-1 text-[11px] text-slate-600">
