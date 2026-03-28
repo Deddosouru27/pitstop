@@ -1,0 +1,20 @@
+{
+  "name": "pitstop-runner",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "autorun": "tsx src/index.ts autorun",
+    "run-task": "tsx src/index.ts run",
+    "stop": "tsx src/index.ts stop"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.99.3"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "~5.9.3",
+    "@types/node": "^24.12.0"
+  }
+}
