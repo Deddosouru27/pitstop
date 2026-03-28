@@ -1,5 +1,7 @@
 import { useState, useRef } from 'react'
-import { Zap, Loader2 } from 'lucide-react'
+import { Zap, Loader2, Link } from 'lucide-react'
+
+const INTAKE_URL = import.meta.env.VITE_INTAKE_URL as string | undefined
 import { supabase } from '../../lib/supabase'
 import { callClaude } from '../../lib/anthropic'
 import { addSnapshot } from '../../hooks/useContextSnapshots'
@@ -17,12 +19,18 @@ interface QuickCaptureProps {
   projects: Project[]
 }
 
+function isUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value.trim())
+}
+
 export default function QuickCapture({ projects }: QuickCaptureProps) {
   const [text, setText] = useState('')
   const [saving, setSaving] = useState(false)
   const [flash, setFlash] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const urlDetected = isUrl(text)
 
   const showFlash = (msg: string) => {
     if (flashTimer.current) clearTimeout(flashTimer.current)
@@ -83,6 +91,7 @@ export default function QuickCapture({ projects }: QuickCaptureProps) {
           project_id: projectId,
           content,
           ai_category: category,
+          ...(isUrl(content) ? { source: 'url' } : {}),
         })
         .select()
         .single()
@@ -123,6 +132,8 @@ export default function QuickCapture({ projects }: QuickCaptureProps) {
         <div className="flex items-center gap-2 bg-white/5 backdrop-blur border border-white/10 rounded-2xl px-4 py-3">
           {saving ? (
             <Loader2 size={16} className="text-purple-400 animate-spin shrink-0" />
+          ) : urlDetected ? (
+            <Link size={16} className="text-blue-400 shrink-0" />
           ) : (
             <Zap size={16} className="text-purple-400 shrink-0" />
           )}
@@ -136,7 +147,18 @@ export default function QuickCapture({ projects }: QuickCaptureProps) {
             className="flex-1 bg-transparent text-sm text-slate-100 placeholder:text-slate-500 outline-none"
             disabled={saving}
           />
+          {urlDetected && (
+            <span className="shrink-0 text-[11px] font-medium text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg px-2 py-0.5">
+              🔗 URL
+            </span>
+          )}
         </div>
+
+        {urlDetected && INTAKE_URL && (
+          <p className="text-[11px] text-slate-500 mt-1.5 px-1">
+            Будет обработан через Intake
+          </p>
+        )}
 
         {flash && (
           <div className="absolute -bottom-7 left-0 right-0 text-center">

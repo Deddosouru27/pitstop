@@ -93,7 +93,7 @@ export default function DashboardPage() {
 
       <div className="px-4 space-y-6">
         {/* Stat cards */}
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <StatCard
             label="Success rate"
             value={`${stats.successRate}%`}
@@ -108,6 +108,11 @@ export default function DashboardPage() {
             label="Среднее"
             value={stats.avgDurationSeconds > 0 ? formatDuration(stats.avgDurationSeconds) : '—'}
             sub="на задачу"
+          />
+          <StatCard
+            label="Память"
+            value={stats.memoryCount != null ? String(stats.memoryCount) : '—'}
+            sub="записей"
           />
         </div>
 

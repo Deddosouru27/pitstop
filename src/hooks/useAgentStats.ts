@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { supabaseMemory } from '../lib/supabaseMemory'
 import type { AgentJob } from './useAgentJobs'
 
 export interface DayCount {
@@ -14,6 +15,7 @@ export interface AgentStats {
   avgDurationSeconds: number
   jobsByDay: DayCount[]      // последние 14 дней
   recentJobs: AgentJob[]     // последние 10 записей (любой статус)
+  memoryCount: number | null // кол-во записей в maos-memory (null = env не задан)
 }
 
 export function useAgentStats() {
@@ -24,7 +26,9 @@ export function useAgentStats() {
     const fetchStats = async () => {
       const since14 = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString()
 
-      const [statsRes, recentRes] = await Promise.all([
+      const hasMemoryEnv = !!import.meta.env.VITE_MEMORY_SUPABASE_URL
+
+      const [statsRes, recentRes, memoryRes] = await Promise.all([
         supabase
           .from('agent_jobs')
           .select('id, type, status, project_id, result, created_at, updated_at')
@@ -35,10 +39,14 @@ export function useAgentStats() {
           .select('id, type, status, project_id, result, created_at, updated_at')
           .order('created_at', { ascending: false })
           .limit(10),
+        hasMemoryEnv
+          ? supabaseMemory.from('memories').select('*', { count: 'exact', head: true })
+          : Promise.resolve({ count: null, error: null }),
       ])
 
       const allJobs: AgentJob[] = statsRes.data ?? []
       const recentJobs: AgentJob[] = recentRes.data ?? []
+      const memoryCount: number | null = memoryRes.error ? null : (memoryRes.count ?? null)
 
       // ── Success rate за 7 дней ────────────────────────────────────────────
       const since7 = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
@@ -84,6 +92,7 @@ export function useAgentStats() {
         avgDurationSeconds,
         jobsByDay,
         recentJobs,
+        memoryCount,
       })
       setLoading(false)
     }
