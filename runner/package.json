@@ -1,0 +1,23 @@
+{
+  "name": "pitstop-runner",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.80.0",
+    "@supabase/supabase-js": "^2.99.3",
+    "node-telegram-bot-api": "^0.66.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.12.0",
+    "@types/node-telegram-bot-api": "^0.64.14",
+    "tsx": "^4.19.0",
+    "typescript": "~5.9.3"
+  }
+}
