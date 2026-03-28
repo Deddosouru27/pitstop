@@ -23,6 +23,9 @@ export default function IdeaDetailModal({ idea, project, onClose, onConvert, onD
     ? idea.ai_category.charAt(0).toUpperCase() + idea.ai_category.slice(1)
     : 'Idea'
 
+  const title = idea.summary?.trim()
+    || (idea.content.length > 60 ? idea.content.slice(0, 60) + '…' : idea.content)
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm"
@@ -45,8 +48,11 @@ export default function IdeaDetailModal({ idea, project, onClose, onConvert, onD
           </button>
         </div>
 
-        {/* Content */}
-        <p className="text-slate-100 text-base leading-relaxed">{idea.content}</p>
+        {/* Title */}
+        <p className="text-slate-100 text-base font-semibold leading-snug">{title}</p>
+
+        {/* Full content */}
+        <p className="text-slate-400 text-sm leading-relaxed whitespace-pre-wrap">{idea.content}</p>
 
         {/* Meta */}
         <div className="flex items-center gap-2 text-xs text-slate-500">
