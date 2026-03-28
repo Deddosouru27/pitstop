@@ -74,6 +74,7 @@ export function useTasks() {
     priority: Priority
     due_date: string | null
     project_id: string | null
+    assignee?: string | null
   }): Promise<Task | null> => {
     const tempId = `temp-${Date.now()}`
     const now = new Date().toISOString()

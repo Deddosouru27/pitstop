@@ -7,7 +7,7 @@ import type { Task, Project, Priority, BatcherEventType } from '../types'
 interface AppContextType {
   tasks: Task[]
   tasksLoading: boolean
-  createTask: (input: { title: string; description?: string | null; priority: Priority; due_date: string | null; project_id: string | null }) => Promise<Task | null>
+  createTask: (input: { title: string; description?: string | null; priority: Priority; due_date: string | null; project_id: string | null; assignee?: string | null }) => Promise<Task | null>
   updateTask: (id: string, updates: Partial<Task>) => Promise<Task | null>
   completeTask: (id: string, completed: boolean, onCompleted?: (task: Task) => void) => Promise<void>
   deleteTask: (id: string) => Promise<void>

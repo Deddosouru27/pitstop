@@ -5,11 +5,18 @@ import { useApp } from '../../context/AppContext'
 import { inferPriority } from '../../utils/inferPriority'
 import { addSnapshot } from '../../hooks/useContextSnapshots'
 
+const ASSIGNEES = [
+  { value: '', label: 'Авто (autorun решит)' },
+  { value: 'baker', label: 'Пекарь (Pitstop)' },
+  { value: 'runner', label: 'Ноут (Runner/Brain)' },
+  { value: 'intake', label: 'Интакер (Intake)' },
+]
+
 interface Props {
   projects: Project[]
   recentIdeas?: { content: string }[]
   onClose: () => void
-  onCreate: (input: { title: string; description?: string | null; priority: Priority; due_date: string | null; project_id: string | null }) => Promise<void>
+  onCreate: (input: { title: string; description?: string | null; priority: Priority; due_date: string | null; project_id: string | null; assignee?: string | null }) => Promise<void>
 }
 
 const PRIORITIES: { value: Priority; label: string; activeClass: string }[] = [
@@ -30,6 +37,7 @@ export default function CreateTaskModal({ projects, recentIdeas = [], onClose, o
   const [isAutoInferred, setIsAutoInferred] = useState(false)
   const [dueDate, setDueDate] = useState('')
   const [projectId, setProjectId] = useState('')
+  const [assignee, setAssignee] = useState('')
 
   // Debounced priority inference
   useEffect(() => {
@@ -77,6 +85,7 @@ export default function CreateTaskModal({ projects, recentIdeas = [], onClose, o
       priority,
       due_date: dueDate || null,
       project_id: projectId || null,
+      assignee: assignee || null,
     })
     onClose()
   }
@@ -168,6 +177,20 @@ export default function CreateTaskModal({ projects, recentIdeas = [], onClose, o
                 </select>
               </div>
             )}
+          </div>
+
+          {/* Assignee */}
+          <div className="space-y-1.5">
+            <label className="text-xs text-slate-500">Исполнитель</label>
+            <select
+              value={assignee}
+              onChange={e => setAssignee(e.target.value)}
+              className="w-full bg-surface text-slate-100 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-accent"
+            >
+              {ASSIGNEES.map(a => (
+                <option key={a.value} value={a.value}>{a.label}</option>
+              ))}
+            </select>
           </div>
 
           <button
