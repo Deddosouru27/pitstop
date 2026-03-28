@@ -83,6 +83,7 @@ export interface Idea {
   ai_category: string
   converted_to_task: boolean
   source?: string | null
+  source_type?: string | null
   created_at: string
 }
 

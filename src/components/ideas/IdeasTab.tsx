@@ -3,7 +3,7 @@ import { Lightbulb } from 'lucide-react'
 import { useAllIdeas } from '../../hooks/useAllIdeas'
 import { useApp } from '../../context/AppContext'
 import IdeaDetailModal from './IdeaDetailModal'
-import IntakeViewer, { INTAKE_SOURCES } from '../intake/IntakeViewer'
+import IntakeViewer, { isIntakeIdea } from '../intake/IntakeViewer'
 import type { Idea } from '../../types'
 
 const FILTERS = [
@@ -86,7 +86,7 @@ export default function IdeasTab() {
 
   const filtered = useMemo(() => {
     if (filter === 'all') return ideas
-    if (filter === 'intake') return ideas.filter(i => i.source && INTAKE_SOURCES.has(i.source))
+    if (filter === 'intake') return ideas.filter(isIntakeIdea)
     return ideas.filter(i => i.ai_category === filter)
   }, [ideas, filter])
 

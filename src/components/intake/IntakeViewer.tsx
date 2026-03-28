@@ -1,7 +1,17 @@
 import { ArrowRight, Trash2, Globe } from 'lucide-react'
 import type { Idea, Project } from '../../types'
 
-export const INTAKE_SOURCES = new Set(['youtube', 'instagram', 'article', 'url', 'twitter', 'threads'])
+export const INTAKE_SOURCES = new Set(['youtube', 'instagram', 'article', 'url', 'twitter', 'threads', 'thread'])
+
+/** Returns the effective source value checking both source_type and source fields */
+export function getIdeaSource(idea: { source?: string | null; source_type?: string | null }): string | null {
+  return idea.source_type ?? idea.source ?? null
+}
+
+export function isIntakeIdea(idea: { source?: string | null; source_type?: string | null }): boolean {
+  const src = getIdeaSource(idea)
+  return src != null && INTAKE_SOURCES.has(src)
+}
 
 const SOURCE_CONFIG: Record<string, { label: string; emoji: string; color: string }> = {
   youtube:   { label: 'YouTube',   emoji: '🎬', color: 'bg-red-900/50 text-red-400' },
@@ -31,7 +41,7 @@ export default function IntakeViewer({ ideas, projects, onConvert, onDelete }: P
   const projectMap = new Map(projects.map(p => [p.id, p]))
 
   const intakeIdeas = ideas
-    .filter(i => i.source && INTAKE_SOURCES.has(i.source))
+    .filter(isIntakeIdea)
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
   if (intakeIdeas.length === 0) {
@@ -47,7 +57,7 @@ export default function IntakeViewer({ ideas, projects, onConvert, onDelete }: P
   return (
     <div className="space-y-2">
       {intakeIdeas.map(idea => {
-        const src = idea.source ?? 'url'
+        const src = getIdeaSource(idea) ?? 'url'
         const cfg = SOURCE_CONFIG[src] ?? SOURCE_CONFIG.url
         const proj = projectMap.get(idea.project_id)
         const catColor = idea.ai_category ? (CATEGORY_COLORS[idea.ai_category] ?? CATEGORY_COLORS.other) : null
