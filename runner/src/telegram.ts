@@ -44,7 +44,7 @@ export interface TelegramUpdate {
   }
 }
 
-export type TelegramCommand = 'autorun' | 'stop' | 'status' | 'unknown'
+export type TelegramCommand = 'autorun' | 'stop' | 'status' | 'ping' | 'unknown'
 
 interface ParsedCommand {
   command: TelegramCommand
@@ -67,6 +67,9 @@ function parseTelegramCommand(update: TelegramUpdate): ParsedCommand | null {
   }
   if (text.startsWith('/status')) {
     return { command: 'status', chatId, args: text.slice('/status'.length).trim() }
+  }
+  if (text.startsWith('/ping')) {
+    return { command: 'ping', chatId, args: text.slice('/ping'.length).trim() }
   }
 
   return null
@@ -176,6 +179,24 @@ async function handleStatusCommand(_chatId: number, _args: string): Promise<void
   )
 }
 
+async function handlePingCommand(_chatId: number, _args: string): Promise<void> {
+  const start = Date.now()
+
+  const { error } = await supabase
+    .from('agent_jobs')
+    .select('id', { count: 'exact', head: true })
+    .limit(1)
+
+  const latencyMs = Date.now() - start
+  const dbStatus = error ? `❌ ${error.message}` : `✅ ${latencyMs}ms`
+
+  await sendTelegramMessage(
+    `🏓 <b>Pong!</b>\n` +
+    `📡 Telegram: ✅\n` +
+    `🗄 Supabase: ${dbStatus}`
+  )
+}
+
 // --- Polling loop ---
 
 export async function startTelegramPolling(): Promise<void> {
@@ -228,6 +249,9 @@ export async function startTelegramPolling(): Promise<void> {
             break
           case 'status':
             await handleStatusCommand(parsed.chatId, parsed.args)
+            break
+          case 'ping':
+            await handlePingCommand(parsed.chatId, parsed.args)
             break
           default:
             break
