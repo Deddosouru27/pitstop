@@ -8,6 +8,7 @@ export interface AutorunOptions {
   maxConsecutiveErrors?: number
   maxDurationMs?: number
   projectId?: string
+  existingJobId?: string
 }
 
 export async function startAutorun(options: AutorunOptions = {}): Promise<AutorunSummary> {
@@ -23,22 +24,26 @@ export async function startAutorun(options: AutorunOptions = {}): Promise<Autoru
     results: [],
   }
 
-  // Register autorun job
-  const { data: autorunJob } = await supabase
-    .from('agent_jobs')
-    .insert({
-      type: 'autorun',
-      status: 'running',
-      payload: {
-        max_consecutive_errors: state.maxConsecutiveErrors,
-        max_duration_ms: state.maxDurationMs,
-        project_id: options.projectId ?? null,
-      },
-    })
-    .select('id')
-    .single()
+  // Reuse existing job (from Telegram /autorun) or create a new one
+  let autorunJobId: string | null = options.existingJobId ?? null
 
-  const autorunJobId = autorunJob?.id ?? null
+  if (!autorunJobId) {
+    const { data: autorunJob } = await supabase
+      .from('agent_jobs')
+      .insert({
+        type: 'autorun',
+        status: 'running',
+        payload: {
+          max_consecutive_errors: state.maxConsecutiveErrors,
+          max_duration_ms: state.maxDurationMs,
+          project_id: options.projectId ?? null,
+        },
+      })
+      .select('id')
+      .single()
+
+    autorunJobId = autorunJob?.id ?? null
+  }
 
   await sendTelegramMessage('🚀 <b>Autorun запущен</b>\nОжидаем задачи из PitStop...')
 

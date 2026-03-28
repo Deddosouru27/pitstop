@@ -1,9 +1,12 @@
 import { startAutorun } from './autorun.js'
 import type { AutorunOptions } from './autorun.js'
 import { supabase } from './supabase.js'
+import { startTelegramPolling, sendTelegramMessage } from './telegram.js'
+
+type CommandName = 'autorun' | 'run' | 'stop' | 'telegram' | 'poll'
 
 interface ParsedArgs {
-  command: 'autorun' | 'run' | 'stop'
+  command: CommandName
   projectId?: string
   maxErrors?: number
   maxDurationMs?: number
@@ -12,15 +15,19 @@ interface ParsedArgs {
 
 function parseArgs(argv: string[]): ParsedArgs {
   const args = argv.slice(2)
-  const command = args[0] as ParsedArgs['command']
+  const command = args[0] as CommandName
 
-  if (!command || !['autorun', 'run', 'stop'].includes(command)) {
-    console.error('Usage: tsx src/index.ts <autorun|run|stop> [options]')
+  const validCommands: CommandName[] = ['autorun', 'run', 'stop', 'telegram', 'poll']
+
+  if (!command || !validCommands.includes(command)) {
+    console.error('Usage: tsx src/index.ts <command> [options]')
     console.error('')
     console.error('Commands:')
     console.error('  autorun                   Start continuous task processing')
     console.error('  run                       Run a single next task')
     console.error('  stop --job-id <id>        Stop a running autorun')
+    console.error('  telegram                  Start Telegram bot (long-polling for /autorun, /stop, /status)')
+    console.error('  poll                      Poll for pending autorun jobs and execute them')
     console.error('')
     console.error('Options:')
     console.error('  --project-id <id>         Filter tasks by project')
@@ -196,6 +203,70 @@ async function handleStop(parsed: ParsedArgs): Promise<void> {
   console.log(`[stop] Cancelled autorun job: ${parsed.jobId}`)
 }
 
+async function handleTelegram(): Promise<void> {
+  console.log('[telegram] Starting Telegram bot...')
+  await startTelegramPolling()
+}
+
+async function handlePoll(parsed: ParsedArgs): Promise<void> {
+  console.log('[poll] Polling for pending autorun jobs...')
+  const pollIntervalMs = 5000
+
+  while (true) {
+    try {
+      // Find pending autorun jobs created via Telegram
+      const { data: pendingJobs, error } = await supabase
+        .from('agent_jobs')
+        .select('id, payload')
+        .eq('type', 'autorun')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: true })
+        .limit(1)
+
+      if (error) {
+        console.error(`[poll] Failed to query jobs: ${error.message}`)
+        await sleep(pollIntervalMs)
+        continue
+      }
+
+      if (!pendingJobs || pendingJobs.length === 0) {
+        await sleep(pollIntervalMs)
+        continue
+      }
+
+      const job = pendingJobs[0]
+      const payload = job.payload as Record<string, unknown> | null
+      console.log(`[poll] Found pending autorun job: ${job.id}`)
+
+      // Mark as running
+      await supabase
+        .from('agent_jobs')
+        .update({ status: 'running', updated_at: new Date().toISOString() })
+        .eq('id', job.id)
+
+      // Execute autorun with payload options, reusing the existing job
+      const options: AutorunOptions = {
+        projectId: parsed.projectId ?? (payload?.['project_id'] as string | undefined),
+        maxConsecutiveErrors: parsed.maxErrors,
+        maxDurationMs: parsed.maxDurationMs,
+        existingJobId: job.id,
+      }
+
+      const summary = await startAutorun(options)
+
+      console.log(`[poll] Autorun job ${job.id} finished: ${summary.stopReason}`)
+    } catch (err) {
+      console.error('[poll] Error:', err)
+      await sendTelegramMessage(`❌ <b>Poll error:</b> ${err instanceof Error ? err.message : String(err)}`)
+      await sleep(pollIntervalMs)
+    }
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 async function main(): Promise<void> {
   const parsed = parseArgs(process.argv)
 
@@ -208,6 +279,12 @@ async function main(): Promise<void> {
       break
     case 'stop':
       await handleStop(parsed)
+      break
+    case 'telegram':
+      await handleTelegram()
+      break
+    case 'poll':
+      await handlePoll(parsed)
       break
   }
 }
