@@ -11,10 +11,10 @@ export function getIdeaSource(idea: { source?: string | null; source_type?: stri
   return idea.source_type ?? idea.source ?? null
 }
 
-/** An idea is from Intake if source_type is set (any value), or source matches known intake values */
+/** An idea is from Intake if source_type is set (non-empty), or source matches known intake values */
 export function isIntakeIdea(idea: { source?: string | null; source_type?: string | null }): boolean {
-  if (idea.source_type != null) return true
-  return idea.source != null && INTAKE_SOURCES.has(idea.source)
+  if (idea.source_type != null && idea.source_type !== '') return true
+  return idea.source != null && idea.source !== '' && INTAKE_SOURCES.has(idea.source)
 }
 
 const SOURCE_CONFIG: Record<string, { label: string; emoji: string; color: string }> = {
@@ -43,9 +43,10 @@ interface Props {
   projects: Project[]
   onConvert: (id: string) => void
   onDelete: (id: string) => void
+  onOpen?: (idea: Idea) => void
 }
 
-export default function IntakeViewer({ ideas, projects, onConvert, onDelete }: Props) {
+export default function IntakeViewer({ ideas, projects, onConvert, onDelete, onOpen }: Props) {
   const projectMap = new Map(projects.map(p => [p.id, p]))
 
   const intakeIdeas = ideas
@@ -73,7 +74,8 @@ export default function IntakeViewer({ ideas, projects, onConvert, onDelete }: P
         return (
           <div
             key={idea.id}
-            className="bg-white/5 rounded-2xl p-4 space-y-2 border border-white/[0.06]"
+            className="bg-white/5 rounded-2xl p-4 space-y-2 border border-white/[0.06] cursor-pointer active:opacity-60 transition-opacity"
+            onClick={() => onOpen?.(idea)}
           >
             {/* Source badge + category + date */}
             <div className="flex items-center gap-2 flex-wrap">
@@ -97,7 +99,7 @@ export default function IntakeViewer({ ideas, projects, onConvert, onDelete }: P
             </div>
 
             {/* Content */}
-            <p className="text-slate-100 text-sm leading-relaxed">{idea.content}</p>
+            <p className="text-slate-100 text-sm leading-relaxed line-clamp-2">{idea.content}</p>
             {idea.extracted_ideas && idea.extracted_ideas.length > 0 && (
               <div className="space-y-0.5">
                 {idea.extracted_ideas.slice(0, 2).map((item, i) => (
@@ -113,7 +115,7 @@ export default function IntakeViewer({ ideas, projects, onConvert, onDelete }: P
             {idea.converted_to_task ? (
               <p className="text-xs text-emerald-500/70">✓ Задача создана</p>
             ) : (
-              <div className="flex gap-2 pt-1">
+              <div className="flex gap-2 pt-1" onClick={e => e.stopPropagation()}>
                 <button
                   onClick={() => onConvert(idea.id)}
                   className="flex-1 flex items-center justify-center gap-1.5 bg-purple-600/20 active:bg-purple-600/40 text-purple-400 text-xs font-medium py-2 rounded-xl transition-colors"

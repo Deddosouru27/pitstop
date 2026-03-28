@@ -49,7 +49,7 @@ function IdeaCard({
       onClick={() => onOpen(idea)}
       className="w-full text-left bg-white/5 rounded-2xl p-4 space-y-2 active:opacity-60 transition-opacity border border-white/[0.06]"
     >
-      <p className="text-slate-100 text-sm leading-relaxed line-clamp-3">{idea.content}</p>
+      <p className="text-slate-100 text-sm leading-relaxed line-clamp-2">{idea.content}</p>
       {extractedPreview.length > 0 && (
         <div className="space-y-0.5">
           {extractedPreview.map((item, i) => (
@@ -143,6 +143,7 @@ export default function IdeasTab() {
             projects={projects}
             onConvert={markConverted}
             onDelete={deleteIdea}
+            onOpen={setSelectedIdea}
           />
         ) : (
           <>
