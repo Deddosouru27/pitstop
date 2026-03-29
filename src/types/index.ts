@@ -112,6 +112,7 @@ export interface ExtractedKnowledge {
   tags: string[] | null
   source_url: string | null
   source_type: string | null
+  business_value: string | null
   created_at: string
 }
 

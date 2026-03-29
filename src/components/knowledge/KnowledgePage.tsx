@@ -137,6 +137,10 @@ function KnowledgeCard({ item, onOpen }: { item: ExtractedKnowledge; onOpen: (i:
     >
       <p className="text-slate-100 text-sm leading-relaxed line-clamp-3 overflow-hidden">{item.content}</p>
 
+      {item.business_value && (
+        <p className="text-slate-500 text-xs leading-relaxed line-clamp-2">🎯 {item.business_value}</p>
+      )}
+
       <div className="flex items-center gap-2 flex-wrap">
         {item.knowledge_type && (
           <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${typeColor}`}>
