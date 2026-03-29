@@ -1,5 +1,22 @@
 export type Priority = 'none' | 'low' | 'medium' | 'high'
 
+export interface CyclePlanPhase {
+  number: number
+  name: string
+  description?: string
+  status: 'active' | 'completed' | 'pending'
+}
+
+export interface CyclePlan {
+  id: string
+  name: string
+  description: string | null
+  status: string
+  phases: CyclePlanPhase[] | null
+  created_at: string
+  updated_at: string
+}
+
 export type BatcherEventType =
   | 'task_completed'
   | 'idea_converted'
