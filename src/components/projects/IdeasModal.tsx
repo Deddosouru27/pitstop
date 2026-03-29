@@ -63,7 +63,7 @@ function IdeaRow({ idea, onConvert, onDelete }: IdeaRowProps) {
           </span>
         )}
         <span className="text-xs text-slate-600 ml-auto">
-          {new Date(idea.created_at).toLocaleDateString('ru-RU')}
+          {new Date(idea.created_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
         </span>
         <button
           onClick={() => onConvert(idea)}

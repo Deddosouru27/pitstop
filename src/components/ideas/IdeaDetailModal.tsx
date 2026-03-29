@@ -66,7 +66,7 @@ export default function IdeaDetailModal({ idea, project, onClose, onConvert, onD
               <span>·</span>
             </>
           )}
-          <span>{new Date(idea.created_at).toLocaleDateString()}</span>
+          <span>{new Date(idea.created_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
         </div>
 
         {/* Actions */}
