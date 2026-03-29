@@ -1,15 +1,129 @@
 import { useState, useMemo } from 'react'
-import { Plus, ChevronRight } from 'lucide-react'
+import { Plus, ChevronRight, X, ArrowRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../../context/AppContext'
 import CreateProjectModal from './CreateProjectModal'
 import QuickCapture from './QuickCapture'
 import { useAutorunStatus } from '../../hooks/useAutorunStatus'
+import type { Project, Task } from '../../types'
+
+const PRIORITY_ORDER: Record<string, number> = { high: 3, medium: 2, low: 1, none: 0 }
+const ACTIVE_STATUSES = new Set(['todo', 'in_progress', 'review', 'blocked'])
+
+const TASK_STATUS_ICON: Record<string, string> = {
+  done: '✅', cancelled: '❌', in_progress: '🔵',
+  review: '👀', blocked: '🚫', todo: '⬜', backlog: '📋',
+}
+const ASSIGNEE_BADGE: Record<string, string> = {
+  baker: '🍞', runner: '🖥️', intake: '🔧', user: '👤',
+}
+
+function sortByPriority(tasks: Task[]) {
+  return [...tasks].sort(
+    (a, b) => (PRIORITY_ORDER[b.priority] ?? 0) - (PRIORITY_ORDER[a.priority] ?? 0)
+  )
+}
+
+function ProjectTasksModal({
+  project, tasks, onClose,
+}: { project: Project; tasks: Task[]; onClose: () => void }) {
+  const navigate = useNavigate()
+  const active = sortByPriority(tasks.filter(t => ACTIVE_STATUSES.has(t.status ?? '') && !t.is_completed))
+  const done   = tasks.filter(t => t.is_completed || t.status === 'done')
+  const cancelled = tasks.filter(t => t.status === 'cancelled')
+
+  function TaskRow({ task }: { task: Task }) {
+    const icon = TASK_STATUS_ICON[task.status ?? 'backlog'] ?? '📋'
+    const dimmed = task.is_completed || task.status === 'done' || task.status === 'cancelled'
+    return (
+      <div className="flex items-start gap-2 py-1">
+        <span className="text-xs shrink-0 mt-0.5">{icon}</span>
+        <p className={`flex-1 text-xs leading-snug ${dimmed ? 'line-through text-slate-600' : 'text-slate-300'}`}>
+          {task.title}
+        </p>
+        {task.assignee && ASSIGNEE_BADGE[task.assignee] && (
+          <span className="shrink-0 text-[10px]">{ASSIGNEE_BADGE[task.assignee]}</span>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60" />
+      <div
+        className="relative w-full bg-[#13131a] rounded-t-3xl max-h-[80dvh] flex flex-col shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Drag handle */}
+        <div className="flex justify-center pt-3 pb-1 shrink-0">
+          <div className="w-10 h-1 bg-white/20 rounded-full" />
+        </div>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-3 shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="w-3 h-3 rounded-full shrink-0" style={{ background: project.color }} />
+            <p className="text-slate-100 font-semibold text-base">{project.name}</p>
+          </div>
+          <button onClick={onClose} className="text-slate-500 active:text-slate-300">
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Task list */}
+        <div className="flex-1 overflow-y-auto px-5 pb-4 space-y-3">
+          {tasks.length === 0 && (
+            <p className="text-sm text-slate-600 py-4 text-center">Нет задач</p>
+          )}
+
+          {active.length > 0 && (
+            <div>
+              <p className="text-[10px] text-slate-600 uppercase tracking-wider font-medium mb-1.5">
+                Активные · {active.length}
+              </p>
+              {active.map(t => <TaskRow key={t.id} task={t} />)}
+            </div>
+          )}
+
+          {done.length > 0 && (
+            <div>
+              <p className="text-[10px] text-slate-600 uppercase tracking-wider font-medium mb-1.5">
+                Выполнено · {done.length}
+              </p>
+              {done.map(t => <TaskRow key={t.id} task={t} />)}
+            </div>
+          )}
+
+          {cancelled.length > 0 && (
+            <div>
+              <p className="text-[10px] text-slate-600 uppercase tracking-wider font-medium mb-1.5">
+                Отменено · {cancelled.length}
+              </p>
+              {cancelled.map(t => <TaskRow key={t.id} task={t} />)}
+            </div>
+          )}
+        </div>
+
+        {/* Open full project */}
+        <div className="px-5 pb-8 pt-2 shrink-0 border-t border-white/[0.06]">
+          <button
+            onClick={() => { onClose(); navigate(`/projects/${project.id}`) }}
+            className="w-full flex items-center justify-center gap-2 bg-purple-600/20 active:bg-purple-600/40 text-purple-400 text-sm font-medium py-3 rounded-2xl transition-colors"
+          >
+            Открыть проект
+            <ArrowRight size={15} />
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function ProjectsTab() {
   const { projects, projectsLoading, tasks, createProject } = useApp()
-  const navigate = useNavigate()
   const [showModal, setShowModal] = useState(false)
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const autorunState = useAutorunStatus()
 
   const ASSIGNEE_ICONS: Record<string, string> = { baker: '🍞', runner: '🖥️', intake: '🔧' }
@@ -89,7 +203,7 @@ export default function ProjectsTab() {
           return (
             <button
               key={project.id}
-              onClick={() => navigate(`/projects/${project.id}`)}
+              onClick={() => setSelectedProject(project)}
               className="w-full flex items-center gap-3 bg-surface rounded-2xl overflow-hidden active:opacity-60 transition-opacity"
             >
               {/* Color left border */}
@@ -132,6 +246,14 @@ export default function ProjectsTab() {
         <CreateProjectModal
           onClose={() => setShowModal(false)}
           onCreate={async (input) => { await createProject(input) }}
+        />
+      )}
+
+      {selectedProject && (
+        <ProjectTasksModal
+          project={selectedProject}
+          tasks={tasks.filter(t => t.project_id === selectedProject.id)}
+          onClose={() => setSelectedProject(null)}
         />
       )}
     </div>
