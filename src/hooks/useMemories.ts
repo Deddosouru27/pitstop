@@ -8,13 +8,16 @@ export function useMemories() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const fetchMemories = async () => {
+    let cancelled = false
+
+    async function fetchMemories() {
       const { data, error: err } = await supabaseMemory
         .from('memories')
         .select('id, content, source, tags, importance, created_at')
         .order('created_at', { ascending: false })
         .limit(50)
 
+      if (cancelled) return
       if (err) {
         setError(err.message)
       } else if (data) {
@@ -24,23 +27,7 @@ export function useMemories() {
     }
 
     fetchMemories()
-
-    // Realtime subscription — new memories appear instantly
-    const channel = supabaseMemory
-      .channel('realtime-memories')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'memories' },
-        (payload) => {
-          setMemories(prev => {
-            if (prev.some(m => m.id === (payload.new as Memory).id)) return prev
-            return [payload.new as Memory, ...prev]
-          })
-        },
-      )
-      .subscribe()
-
-    return () => { supabaseMemory.removeChannel(channel) }
+    return () => { cancelled = true }
   }, [])
 
   return { memories, loading, error }
