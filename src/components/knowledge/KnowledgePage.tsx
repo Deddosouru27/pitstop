@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { BookOpen, X, ExternalLink } from 'lucide-react'
+import { BookOpen, X, ExternalLink, Search } from 'lucide-react'
 import { useExtractedKnowledge } from '../../hooks/useExtractedKnowledge'
 import type { ExtractedKnowledge } from '../../types'
 
@@ -72,6 +72,12 @@ function KnowledgeModal({ item, onClose }: { item: ExtractedKnowledge; onClose: 
         <div className="flex-1 overflow-y-auto px-5 pb-8 space-y-4">
           <p className="text-slate-100 text-sm leading-relaxed whitespace-pre-wrap">{item.content}</p>
 
+          {item.business_value ? (
+            <p className="text-slate-400 text-xs leading-relaxed">🎯 {item.business_value}</p>
+          ) : (
+            <p className="text-slate-600 text-xs italic">Появится при следующем анализе</p>
+          )}
+
           <div className="space-y-2">
             <div>
               <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Immediate relevance</p>
@@ -129,18 +135,27 @@ function KnowledgeModal({ item, onClose }: { item: ExtractedKnowledge; onClose: 
 function KnowledgeCard({ item, onOpen }: { item: ExtractedKnowledge; onOpen: (i: ExtractedKnowledge) => void }) {
   const typeColor = (item.knowledge_type && TYPE_COLORS[item.knowledge_type]) ?? 'bg-slate-800 text-slate-400'
   const routedColor = (item.routed_to && ROUTED_COLORS[item.routed_to]) ?? 'bg-slate-800 text-slate-400'
+  const dateStr = new Date(item.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
 
   return (
     <button
       onClick={() => onOpen(item)}
       className="w-full text-left bg-white/5 rounded-2xl p-4 space-y-2 border border-white/[0.06] active:opacity-60 transition-opacity"
     >
-      <p className="text-slate-100 text-sm leading-relaxed line-clamp-3 overflow-hidden">{item.content}</p>
+      {/* Content + date top-right */}
+      <div className="flex items-start gap-2">
+        <p className="flex-1 text-slate-100 text-sm leading-relaxed line-clamp-3 overflow-hidden">{item.content}</p>
+        <span className="shrink-0 text-[10px] text-slate-600 mt-0.5">{dateStr}</span>
+      </div>
 
-      {item.business_value && (
+      {/* business_value */}
+      {item.business_value ? (
         <p className="text-slate-500 text-xs leading-relaxed line-clamp-2">🎯 {item.business_value}</p>
+      ) : (
+        <p className="text-slate-700 text-xs italic">Появится при следующем анализе</p>
       )}
 
+      {/* Badges */}
       <div className="flex items-center gap-2 flex-wrap">
         {item.knowledge_type && (
           <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${typeColor}`}>
@@ -163,11 +178,23 @@ function KnowledgeCard({ item, onOpen }: { item: ExtractedKnowledge; onOpen: (i:
         {item.strategic_relevance != null && item.strategic_relevance >= 0.7 && (
           <span className="text-[10px] font-medium text-blue-400">🎯{Math.round(item.strategic_relevance * 10)}</span>
         )}
-        <span className="text-[10px] text-slate-600 ml-auto">
-          {new Date(item.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
-        </span>
       </div>
 
+      {/* source_url on card */}
+      {item.source_url && (
+        <a
+          href={item.source_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1.5 text-[10px] text-blue-400 active:text-blue-300 w-fit"
+          onClick={e => e.stopPropagation()}
+        >
+          <ExternalLink size={10} />
+          <span className="truncate max-w-[200px]">{item.source_url}</span>
+        </a>
+      )}
+
+      {/* Tags */}
       {item.tags && item.tags.length > 0 && (
         <div className="flex gap-1 flex-wrap">
           {item.tags.slice(0, 3).map(tag => (
@@ -184,10 +211,14 @@ function KnowledgeCard({ item, onOpen }: { item: ExtractedKnowledge; onOpen: (i:
   )
 }
 
+type SortKey = 'date' | 'immediate' | 'strategic'
+
 export default function KnowledgePage() {
   const { items, loading, error } = useExtractedKnowledge()
   const [typeFilter, setTypeFilter] = useState<string>('all')
   const [routeFilter, setRouteFilter] = useState<string>('all')
+  const [search, setSearch] = useState('')
+  const [sortBy, setSortBy] = useState<SortKey>('date')
   const [selected, setSelected] = useState<ExtractedKnowledge | null>(null)
 
   const types = useMemo(() => {
@@ -202,13 +233,27 @@ export default function KnowledgePage() {
     return { total: items.length, hot, strategic }
   }, [items])
 
+  const routeCounts = useMemo(() => {
+    const counts: Record<string, number> = { hot: 0, knowledge: 0, discard: 0 }
+    for (const i of items) if (i.routed_to && counts[i.routed_to] !== undefined) counts[i.routed_to]++
+    return counts
+  }, [items])
+
   const filtered = useMemo(() => {
-    return items.filter(i => {
+    let result = items.filter(i => {
       if (typeFilter !== 'all' && i.knowledge_type !== typeFilter) return false
       if (routeFilter !== 'all' && i.routed_to !== routeFilter) return false
+      if (search.trim() && !i.content.toLowerCase().includes(search.toLowerCase())) return false
       return true
     })
-  }, [items, typeFilter, routeFilter])
+    if (sortBy === 'immediate') {
+      result = [...result].sort((a, b) => (b.immediate_relevance ?? 0) - (a.immediate_relevance ?? 0))
+    } else if (sortBy === 'strategic') {
+      result = [...result].sort((a, b) => (b.strategic_relevance ?? 0) - (a.strategic_relevance ?? 0))
+    }
+    // default: date order preserved from fetch
+    return result
+  }, [items, typeFilter, routeFilter, search, sortBy])
 
   if (loading) {
     return <div className="flex items-center justify-center h-48 text-slate-500 text-sm">Loading...</div>
@@ -252,9 +297,40 @@ export default function KnowledgePage() {
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Search + sort row */}
+      <div className="px-4 pb-3 flex gap-2">
+        <div className="relative flex-1">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Поиск..."
+            className="w-full bg-white/5 border border-white/[0.06] rounded-xl pl-8 pr-3 py-2 text-sm text-slate-100 placeholder-slate-600 outline-none focus:border-purple-500/50 transition-colors"
+          />
+        </div>
+        <select
+          value={sortBy}
+          onChange={e => setSortBy(e.target.value as SortKey)}
+          className="bg-white/5 border border-white/[0.06] rounded-xl px-3 py-2 text-xs text-slate-400 outline-none"
+        >
+          <option value="date">По дате</option>
+          <option value="immediate">По immediate</option>
+          <option value="strategic">По strategic</option>
+        </select>
+      </div>
+
+      {/* Route filter chips with counts */}
       <div className="px-4 pb-2 flex gap-2 overflow-x-auto scrollbar-hide">
-        {['all', 'hot', 'knowledge', 'discard'].map(r => (
+        <button
+          onClick={() => setRouteFilter('all')}
+          className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
+            routeFilter === 'all' ? 'bg-purple-600 text-white' : 'bg-white/5 text-slate-400 active:bg-white/10'
+          }`}
+        >
+          Все
+        </button>
+        {(['hot', 'knowledge', 'discard'] as const).map(r => (
           <button
             key={r}
             onClick={() => setRouteFilter(r)}
@@ -262,11 +338,12 @@ export default function KnowledgePage() {
               routeFilter === r ? 'bg-purple-600 text-white' : 'bg-white/5 text-slate-400 active:bg-white/10'
             }`}
           >
-            {r === 'all' ? 'Все' : r}
+            {r} ({routeCounts[r]})
           </button>
         ))}
       </div>
 
+      {/* Type filter chips */}
       {types.length > 0 && (
         <div className="px-4 pb-3 flex gap-2 overflow-x-auto scrollbar-hide">
           {['all', ...types].map(t => (
