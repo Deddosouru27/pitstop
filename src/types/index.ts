@@ -63,6 +63,11 @@ export interface Project {
   ai_where_stopped: string | null
   ai_next_step: string | null
   last_session_at: string | null
+  description?: string | null
+  current_focus?: string | null
+  tech_stack?: string[] | null
+  current_needs?: string[] | null
+  long_term_goals?: string[] | null
   created_at: string
   updated_at: string
 }

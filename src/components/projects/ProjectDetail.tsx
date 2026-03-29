@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Plus, Pencil, Target, ChevronLeft, SlidersHorizontal } from 'lucide-react'
+import { ArrowLeft, Plus, Pencil, Target, ChevronLeft, SlidersHorizontal, X } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
 import { useIdeas } from '../../hooks/useIdeas'
 import { callClaude } from '../../lib/anthropic'
@@ -18,8 +18,65 @@ import GoalInputSheet from './GoalInputSheet'
 import GoalPreviewSheet from './GoalPreviewSheet'
 import type { ProposedTask } from './GoalPreviewSheet'
 import BotActivitySection from './BotActivitySection'
-import TaskItem from '../tasks/TaskItem'
 import type { Idea, Task } from '../../types'
+
+const TASK_STATUS_CFG: Record<string, { icon: string; cls: string }> = {
+  done:        { icon: '✅', cls: 'line-through text-slate-600' },
+  cancelled:   { icon: '❌', cls: 'line-through text-red-900' },
+  in_progress: { icon: '🔵', cls: 'text-purple-300 font-medium' },
+  review:      { icon: '👀', cls: 'text-amber-400' },
+  blocked:     { icon: '🚫', cls: 'text-red-400' },
+  todo:        { icon: '⬜', cls: 'text-slate-400' },
+  backlog:     { icon: '📋', cls: 'text-slate-600' },
+}
+
+const ASSIGNEE_LABEL: Record<string, string> = {
+  baker:  'Пекарь',
+  intake: 'Интакер',
+  runner: 'Ноут',
+  user:   'Артур',
+}
+
+function TaskDetailModal({ task, onClose }: { task: Task; onClose: () => void }) {
+  const cfg = TASK_STATUS_CFG[task.status ?? 'backlog'] ?? TASK_STATUS_CFG.backlog
+  return (
+    <div className="fixed inset-0 z-50 flex items-end" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60" />
+      <div
+        className="relative w-full bg-[#13131a] rounded-t-3xl max-h-[75dvh] flex flex-col shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex justify-center pt-3 pb-1 shrink-0">
+          <div className="w-10 h-1 bg-white/20 rounded-full" />
+        </div>
+        <div className="flex items-center justify-between px-5 py-3 shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="text-sm">{cfg.icon}</span>
+            <span className={`text-xs font-medium px-2 py-0.5 rounded-full bg-white/5 ${cfg.cls}`}>
+              {task.status ?? 'backlog'}
+            </span>
+            {task.assignee && ASSIGNEE_LABEL[task.assignee] && (
+              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-white/5 text-slate-400">
+                {ASSIGNEE_LABEL[task.assignee]}
+              </span>
+            )}
+          </div>
+          <button onClick={onClose} className="text-slate-500 active:text-slate-300 transition-colors">
+            <X size={20} />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 pb-8 space-y-3">
+          <p className="text-slate-100 text-base font-semibold leading-snug">{task.title}</p>
+          {task.description ? (
+            <p className="text-slate-400 text-sm leading-relaxed whitespace-pre-wrap">{task.description}</p>
+          ) : (
+            <p className="text-slate-600 text-sm italic">Описание не указано</p>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 const CONTEXT_SYSTEM_PROMPT = `Ты — интеллектуальный менеджер проекта. Анализируй историю и текущее состояние проекта, возвращай ТОЛЬКО валидный JSON без markdown и пояснений.
 
@@ -72,6 +129,7 @@ export default function ProjectDetail() {
   const [quickAddOpen, setQuickAddOpen] = useState(false)
   const [quickAddTitle, setQuickAddTitle] = useState('')
   const [quickAddPriority, setQuickAddPriority] = useState<'low' | 'medium' | 'high'>('medium')
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null)
 
   const project = projects.find(p => p.id === id)
 
@@ -94,8 +152,31 @@ export default function ProjectDetail() {
     [projectTasks]
   )
   const completedTasks = useMemo(() => projectTasks.filter(t => t.is_completed), [projectTasks])
-  const [showDone, setShowDone] = useState(false)
-  const [assigneeFilter, setAssigneeFilter] = useState<'all' | 'baker' | 'runner' | 'intake' | 'bot'>('all')
+
+  // Grouped task lists for full detail view
+  const activeDetailTasks = useMemo(() =>
+    projectTasks
+      .filter(t => !t.is_completed && t.status !== 'done' && t.status !== 'cancelled' && t.status !== 'backlog')
+      .sort((a, b) => {
+        const pa = PRIORITY_ORDER[a.priority] ?? 3
+        const pb = PRIORITY_ORDER[b.priority] ?? 3
+        if (pa !== pb) return pa - pb
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      }),
+    [projectTasks]
+  )
+  const backlogDetailTasks = useMemo(() =>
+    projectTasks.filter(t => !t.is_completed && t.status === 'backlog'),
+    [projectTasks]
+  )
+  const doneDetailTasks = useMemo(() =>
+    projectTasks.filter(t => t.is_completed || t.status === 'done'),
+    [projectTasks]
+  )
+  const cancelledDetailTasks = useMemo(() =>
+    projectTasks.filter(t => t.status === 'cancelled'),
+    [projectTasks]
+  )
 
   // Keep always-current refs for use inside the batcher callback
   const activeTasksRef = useRef(activeTasks)
@@ -439,6 +520,56 @@ Format: [{"title": string, "description": string, "priority": "low"|"medium"|"hi
             />
           </div>
 
+          {/* Strategic Info */}
+          {(project.description || project.current_focus || (project.tech_stack?.length ?? 0) > 0 || (project.current_needs?.length ?? 0) > 0 || (project.long_term_goals?.length ?? 0) > 0) && (
+            <div className="space-y-3 bg-white/[0.02] border border-white/[0.06] rounded-2xl px-4 py-4">
+              {project.current_focus && (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-300 text-sm font-medium">
+                  🎯 {project.current_focus}
+                </div>
+              )}
+              {project.description && (
+                <p className="text-slate-400 text-sm leading-relaxed">{project.description}</p>
+              )}
+              {(project.tech_stack?.length ?? 0) > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-[10px] text-slate-600 uppercase tracking-wider font-medium">Tech Stack</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {project.tech_stack!.map(t => (
+                      <span key={t} className="text-xs px-2 py-0.5 rounded-lg bg-white/5 border border-white/[0.06] text-slate-400">{t}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {(project.current_needs?.length ?? 0) > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-[10px] text-slate-600 uppercase tracking-wider font-medium">Current Needs</p>
+                  <ul className="space-y-1">
+                    {project.current_needs!.map((n, i) => (
+                      <li key={i} className="flex items-start gap-2 text-xs text-slate-400">
+                        <span className="text-slate-600 mt-0.5 shrink-0">•</span>
+                        {n}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {(project.long_term_goals?.length ?? 0) > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-[10px] text-slate-600 uppercase tracking-wider font-medium">Long-Term Goals</p>
+                  <ul className="space-y-1">
+                    {project.long_term_goals!.map((g, i) => (
+                      <li key={i} className="flex items-start gap-2 text-xs text-slate-400">
+                        <span className="text-slate-600 mt-0.5 shrink-0">→</span>
+                        {g}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Set Goal button */}
           <button
             onClick={() => setGoalSheetOpen(true)}
@@ -448,11 +579,11 @@ Format: [{"title": string, "description": string, "priority": "low"|"medium"|"hi
             Задать цель
           </button>
 
-          {/* Tasks */}
+          {/* Tasks — all grouped */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                Задачи · {activeTasks.length} активных
+                Задачи · {projectTasks.length}
               </h2>
               <button
                 onClick={() => setQuickAddOpen(v => !v)}
@@ -461,31 +592,6 @@ Format: [{"title": string, "description": string, "priority": "low"|"medium"|"hi
                 <Plus size={15} strokeWidth={2.5} />
               </button>
             </div>
-
-            {/* Assignee filter chips */}
-            {activeTasks.length > 0 && (
-              <div className="flex gap-1.5 flex-wrap">
-                {([
-                  { value: 'all', label: 'Все' },
-                  { value: 'baker', label: '🍞 Пекарь' },
-                  { value: 'runner', label: '🖥️ Ноут' },
-                  { value: 'intake', label: '🔧 Интакер' },
-                  { value: 'bot', label: '📥 От бота' },
-                ] as const).map(f => (
-                  <button
-                    key={f.value}
-                    onClick={() => setAssigneeFilter(f.value)}
-                    className={`text-xs px-3 py-1.5 rounded-xl transition-colors font-medium ${
-                      assigneeFilter === f.value
-                        ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
-                        : 'bg-white/5 text-slate-500 border border-white/[0.06]'
-                    }`}
-                  >
-                    {f.label}
-                  </button>
-                ))}
-              </div>
-            )}
 
             {quickAddOpen && (
               <div className="bg-surface rounded-2xl p-4 space-y-3">
@@ -532,43 +638,38 @@ Format: [{"title": string, "description": string, "priority": "low"|"medium"|"hi
               </div>
             )}
 
-            <div className="space-y-1.5">
-              {activeTasks
-                .filter(t => {
-                  if (assigneeFilter === 'all') return true
-                  if (assigneeFilter === 'bot') return t.created_by === 'bot'
-                  return t.assignee === assigneeFilter
-                })
-                .map(task => (
-                  <TaskItem
-                    key={task.id}
-                    task={task}
-                    project={project}
-                    onToggle={handleToggleTask}
-                    onOpen={openTask}
-                  />
-                ))}
-            </div>
-
-            {completedTasks.length > 0 && (
-              <div className="space-y-1.5">
-                <button
-                  onClick={() => setShowDone(v => !v)}
-                  className="text-xs font-semibold text-slate-600 uppercase tracking-wider"
-                >
-                  Выполнено ({completedTasks.length}) {showDone ? '▲' : '▼'}
-                </button>
-                {showDone && completedTasks.map(task => (
-                  <TaskItem
-                    key={task.id}
-                    task={task}
-                    project={project}
-                    onToggle={handleToggleTask}
-                    onOpen={openTask}
-                  />
-                ))}
+            {([
+              { label: 'Active', tasks: activeDetailTasks },
+              { label: 'Backlog', tasks: backlogDetailTasks },
+              { label: 'Выполнено', tasks: doneDetailTasks },
+              { label: 'Отменено', tasks: cancelledDetailTasks },
+            ] as const).filter(g => g.tasks.length > 0).map(group => (
+              <div key={group.label}>
+                <p className="text-[10px] text-slate-600 uppercase tracking-wider font-medium mb-1.5">
+                  {group.label} · {group.tasks.length}
+                </p>
+                <div className="space-y-1">
+                  {group.tasks.map(task => {
+                    const cfg = TASK_STATUS_CFG[task.status ?? 'backlog'] ?? TASK_STATUS_CFG.backlog
+                    return (
+                      <button
+                        key={task.id}
+                        onClick={() => setSelectedTask(task)}
+                        className="w-full flex items-start gap-2 text-left bg-white/[0.02] active:opacity-60 rounded-xl px-3 py-2.5 transition-opacity"
+                      >
+                        <span className="text-xs shrink-0 mt-0.5">{cfg.icon}</span>
+                        <p className={`flex-1 text-xs leading-snug line-clamp-2 ${cfg.cls}`}>{task.title}</p>
+                        {task.assignee && ASSIGNEE_LABEL[task.assignee] && (
+                          <span className="shrink-0 text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-white/5 text-slate-500">
+                            {ASSIGNEE_LABEL[task.assignee]}
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
-            )}
+            ))}
           </div>
 
           {/* Bot activity */}
@@ -654,6 +755,10 @@ Format: [{"title": string, "description": string, "priority": "low"|"medium"|"hi
         goalText={goalText}
         isConfirming={isConfirming}
       />
+
+      {selectedTask && (
+        <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} />
+      )}
     </div>
   )
 }
