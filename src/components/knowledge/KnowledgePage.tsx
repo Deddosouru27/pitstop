@@ -18,6 +18,24 @@ const TYPE_COLORS: Record<string, string> = {
   code:        'bg-cyan-900/50 text-cyan-400',
 }
 
+const SOURCE_TYPE_CFG: Record<string, { label: string; cls: string }> = {
+  youtube:       { label: '▶ YouTube',    cls: 'bg-red-900/50 text-red-400' },
+  instagram:     { label: '◈ Instagram',  cls: 'bg-pink-900/50 text-pink-400' },
+  link:          { label: '🔗 Link',       cls: 'bg-blue-900/50 text-blue-400' },
+  text:          { label: '📄 Text',       cls: 'bg-slate-800 text-slate-400' },
+  'manual-paste':{ label: '📋 Paste',      cls: 'bg-slate-800 text-slate-400' },
+}
+
+function sourceTypeBadge(sourceType: string | null) {
+  if (!sourceType) return null
+  const cfg = SOURCE_TYPE_CFG[sourceType] ?? { label: sourceType, cls: 'bg-slate-800 text-slate-400' }
+  return (
+    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${cfg.cls}`}>
+      {cfg.label}
+    </span>
+  )
+}
+
 function scoreBar(value: number | null, color: string) {
   if (value == null || isNaN(value)) return <span className="text-[10px] text-slate-600">—</span>
   const pct = Math.round(value * 100)
@@ -48,6 +66,7 @@ function KnowledgeModal({ item, onClose }: { item: ExtractedKnowledge; onClose: 
 
         <div className="flex items-center justify-between px-5 py-3 shrink-0">
           <div className="flex items-center gap-2 flex-wrap">
+            {sourceTypeBadge(item.source_type)}
             {item.knowledge_type && (
               <span className={`text-[11px] font-medium px-2.5 py-1 rounded-full ${typeColor}`}>
                 {item.knowledge_type}
@@ -157,6 +176,7 @@ function KnowledgeCard({ item, onOpen }: { item: ExtractedKnowledge; onOpen: (i:
 
       {/* Badges */}
       <div className="flex items-center gap-2 flex-wrap">
+        {sourceTypeBadge(item.source_type)}
         {item.knowledge_type && (
           <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${typeColor}`}>
             {item.knowledge_type}
