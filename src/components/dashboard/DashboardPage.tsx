@@ -1,8 +1,9 @@
+import { useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
-import { BarChart2 } from 'lucide-react'
+import { BarChart2, ChevronDown } from 'lucide-react'
 import { useAgentStats } from '../../hooks/useAgentStats'
 import { useCyclePlan } from '../../hooks/useCyclePlan'
-import type { CyclePlanPhase } from '../../types'
+import type { CyclePlanPhase, Task } from '../../types'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -58,8 +59,57 @@ const PHASE_ICON: Record<CyclePlanPhase['status'], string> = {
   pending:   '⬜',
 }
 
+const TASK_STATUS_CFG: Record<string, { icon: string; cls: string }> = {
+  done:        { icon: '✅', cls: 'line-through text-slate-600' },
+  cancelled:   { icon: '❌', cls: 'line-through text-red-900' },
+  in_progress: { icon: '🔵', cls: 'text-purple-300 font-medium' },
+  review:      { icon: '👀', cls: 'text-amber-400' },
+  blocked:     { icon: '🚫', cls: 'text-red-400' },
+  todo:        { icon: '⬜', cls: 'text-slate-400' },
+  backlog:     { icon: '📋', cls: 'text-slate-600' },
+}
+
+const ASSIGNEE_LABEL: Record<string, string> = {
+  baker:  'Пекарь',
+  intake: 'Интакер',
+  runner: 'Ноут',
+  user:   'Артур',
+}
+
+function PhaseTaskList({ tasks }: { tasks: Task[] }) {
+  if (tasks.length === 0) {
+    return <p className="text-xs text-slate-600 py-1 pl-1">Задач нет</p>
+  }
+  return (
+    <div className="space-y-1 pt-1">
+      {tasks.map(task => {
+        const cfg = TASK_STATUS_CFG[task.status ?? 'backlog'] ?? TASK_STATUS_CFG.backlog
+        return (
+          <div key={task.id} className="flex items-start gap-2">
+            <span className="text-xs shrink-0 mt-0.5">{cfg.icon}</span>
+            <p className={`flex-1 text-xs leading-snug line-clamp-1 ${cfg.cls}`}>{task.title}</p>
+            {task.assignee && ASSIGNEE_LABEL[task.assignee] && (
+              <span className="shrink-0 text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-white/5 text-slate-500">
+                {ASSIGNEE_LABEL[task.assignee]}
+              </span>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function CycleWidget() {
-  const { plan, loading } = useCyclePlan()
+  const { plan, tasksByPhase, loading } = useCyclePlan()
+  const phases = plan?.phases ?? []
+  const activePhaseNum = phases.find(p => p.status === 'active')?.number ?? null
+  const [expanded, setExpanded] = useState<number | null>(activePhaseNum)
+
+  // sync default expansion when plan loads
+  if (plan && expanded === null && activePhaseNum !== null) {
+    setExpanded(activePhaseNum)
+  }
 
   if (loading) return null
 
@@ -72,28 +122,41 @@ function CycleWidget() {
     )
   }
 
-  const phases = plan.phases ?? []
-  const activePhase = phases.find(p => p.status === 'active')
+  const allTasks = Object.values(tasksByPhase).flat()
+  const doneTasks = allTasks.filter(t => t.status === 'done' || t.is_completed).length
 
   return (
-    <div className="bg-white/5 rounded-2xl px-4 py-4 border border-white/[0.06] space-y-3">
-      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-        🔄 Текущий цикл: <span className="text-slate-200 normal-case">{plan.name}</span>
-      </p>
+    <div className="bg-white/5 rounded-2xl px-4 py-4 border border-white/[0.06] space-y-1">
+      <div className="flex items-center justify-between pb-2">
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+          🔄 <span className="text-slate-200 normal-case font-semibold">{plan.name}</span>
+        </p>
+        {allTasks.length > 0 && (
+          <span className="text-[11px] text-slate-500">{doneTasks}/{allTasks.length} выполнено</span>
+        )}
+      </div>
 
-      {phases.length > 0 && (
-        <div className="space-y-2">
-          {phases.map(phase => {
-            const isActive = phase.status === 'active'
-            const isDone = phase.status === 'completed'
-            return (
-              <div
-                key={phase.number}
-                className={`flex gap-3 rounded-xl px-3 py-2.5 transition-colors ${
-                  isActive ? 'bg-purple-600/15 border border-purple-500/30' : 'bg-transparent'
-                }`}
+      <div className="space-y-1">
+        {phases.map(phase => {
+          const isActive = phase.status === 'active'
+          const isDone = phase.status === 'completed'
+          const isOpen = expanded === phase.number
+          const phaseTasks = tasksByPhase[phase.number] ?? []
+          const phaseDone = phaseTasks.filter(t => t.status === 'done' || t.is_completed).length
+
+          return (
+            <div
+              key={phase.number}
+              className={`rounded-xl overflow-hidden transition-colors ${
+                isActive ? 'bg-purple-600/10 border border-purple-500/20' : 'bg-white/[0.02]'
+              }`}
+            >
+              {/* Phase header — clickable */}
+              <button
+                onClick={() => setExpanded(isOpen ? null : phase.number)}
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left"
               >
-                <span className="text-base shrink-0 mt-0.5">{PHASE_ICON[phase.status]}</span>
+                <span className="text-sm shrink-0">{PHASE_ICON[phase.status]}</span>
                 <div className="flex-1 min-w-0">
                   <p className={`text-sm font-medium leading-snug ${
                     isDone ? 'line-through text-slate-600' : isActive ? 'text-slate-100' : 'text-slate-500'
@@ -103,21 +166,34 @@ function CycleWidget() {
                       <span className="ml-2 inline-block w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse align-middle" />
                     )}
                   </p>
-                  {isActive && phase.description && (
-                    <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{phase.description}</p>
+                  {isActive && phase.description && !isOpen && (
+                    <p className="text-xs text-slate-500 mt-0.5 leading-relaxed line-clamp-1">{phase.description}</p>
                   )}
                 </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {phaseTasks.length > 0 && (
+                    <span className="text-[10px] text-slate-600">{phaseDone}/{phaseTasks.length}</span>
+                  )}
+                  <ChevronDown
+                    size={14}
+                    className={`text-slate-600 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                  />
+                </div>
+              </button>
 
-      {activePhase && (
-        <p className="text-[11px] text-slate-600 border-t border-white/[0.06] pt-2">
-          Активна: Phase {activePhase.number} · {phases.filter(p => p.status === 'completed').length}/{phases.length} выполнено
-        </p>
-      )}
+              {/* Tasks — expanded */}
+              {isOpen && (
+                <div className="px-3 pb-3">
+                  {isActive && phase.description && (
+                    <p className="text-xs text-slate-500 mb-2 leading-relaxed">{phase.description}</p>
+                  )}
+                  <PhaseTaskList tasks={phaseTasks} />
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

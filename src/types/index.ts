@@ -77,6 +77,8 @@ export interface Task {
   due_date: string | null
   project_id: string | null
   cycle_id?: string | null
+  cycle_plan_id?: string | null
+  phase_number?: number | null
   created_by?: string
   assignee?: string | null
   created_at: string
