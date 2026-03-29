@@ -211,10 +211,104 @@ function KnowledgeCard({ item, onOpen }: { item: ExtractedKnowledge; onOpen: (i:
   )
 }
 
+const INTAKE_URL = 'https://maos-intake.vercel.app/process'
+
+function PasteModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const [title, setTitle] = useState('')
+  const [sourceType, setSourceType] = useState('')
+  const [text, setText] = useState('')
+  const [status, setStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle')
+  const [errMsg, setErrMsg] = useState('')
+
+  async function handleSubmit() {
+    const trimmed = text.trim()
+    if (!trimmed) return
+    setStatus('loading')
+    try {
+      const res = await fetch(INTAKE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: 'manual-paste',
+          text: trimmed,
+          title: title.trim() || undefined,
+          source_type: sourceType.trim() || 'text',
+        }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setStatus('ok')
+      setTimeout(() => { onSuccess(); onClose() }, 1500)
+    } catch (e) {
+      setErrMsg(e instanceof Error ? e.message : 'Неизвестная ошибка')
+      setStatus('error')
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60" />
+      <div
+        className="relative w-full bg-[#13131a] rounded-t-3xl max-h-[90dvh] flex flex-col shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex justify-center pt-3 pb-1 shrink-0">
+          <div className="w-10 h-1 bg-white/20 rounded-full" />
+        </div>
+        <div className="flex items-center justify-between px-5 py-3 shrink-0">
+          <p className="text-slate-100 font-semibold">📥 Вставить текст</p>
+          <button onClick={onClose} className="text-slate-500 active:text-slate-300 transition-colors">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 pb-8 space-y-3">
+          <input
+            type="text"
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            placeholder="Заголовок (опционально)"
+            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-100 placeholder-slate-500 outline-none focus:border-purple-500/50 transition-colors"
+          />
+          <input
+            type="text"
+            value={sourceType}
+            onChange={e => setSourceType(e.target.value)}
+            placeholder="Источник: YouTube видео, Instagram Reel, Статья..."
+            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-100 placeholder-slate-500 outline-none focus:border-purple-500/50 transition-colors"
+          />
+          <textarea
+            value={text}
+            onChange={e => setText(e.target.value)}
+            placeholder="Вставь текст, транскрипт, конспект..."
+            style={{ minHeight: '200px' }}
+            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-100 placeholder-slate-500 outline-none focus:border-purple-500/50 transition-colors resize-none"
+          />
+
+          {status === 'ok' && (
+            <p className="text-emerald-400 text-sm font-medium text-center py-1">✅ Отправлено</p>
+          )}
+          {status === 'error' && (
+            <p className="text-red-400 text-sm text-center py-1">❌ Ошибка: {errMsg}</p>
+          )}
+
+          <button
+            onClick={handleSubmit}
+            disabled={!text.trim() || status === 'loading' || status === 'ok'}
+            className="w-full bg-purple-600 active:bg-purple-700 disabled:opacity-40 text-white font-semibold rounded-2xl py-3 text-sm transition-colors"
+          >
+            {status === 'loading' ? 'Отправка...' : 'Отправить в Brain'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 type SortKey = 'date' | 'immediate' | 'strategic'
 
 export default function KnowledgePage() {
-  const { items, loading, error } = useExtractedKnowledge()
+  const { items, loading, error, refresh } = useExtractedKnowledge()
+  const [showPaste, setShowPaste] = useState(false)
   const [typeFilter, setTypeFilter] = useState<string>('all')
   const [routeFilter, setRouteFilter] = useState<string>('all')
   const [search, setSearch] = useState('')
@@ -274,8 +368,14 @@ export default function KnowledgePage() {
       {/* Header */}
       <div className="px-4 pt-6 pb-3">
         <div className="flex items-center gap-2">
-          <BookOpen size={20} className="text-purple-400" strokeWidth={1.75} />
-          <h1 className="text-2xl font-bold text-slate-100">Knowledge</h1>
+          <BookOpen size={20} className="text-purple-400 shrink-0" strokeWidth={1.75} />
+          <h1 className="flex-1 text-2xl font-bold text-slate-100">Knowledge</h1>
+          <button
+            onClick={() => setShowPaste(true)}
+            className="flex items-center gap-1.5 bg-purple-600/20 active:bg-purple-600/40 text-purple-300 text-xs font-medium px-3 py-2 rounded-xl transition-colors"
+          >
+            📥 Вставить текст
+          </button>
         </div>
       </div>
 
@@ -378,6 +478,13 @@ export default function KnowledgePage() {
       </div>
 
       {selected && <KnowledgeModal item={selected} onClose={() => setSelected(null)} />}
+
+      {showPaste && (
+        <PasteModal
+          onClose={() => setShowPaste(false)}
+          onSuccess={refresh}
+        />
+      )}
     </div>
   )
 }

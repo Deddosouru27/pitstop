@@ -6,11 +6,12 @@ export function useExtractedKnowledge() {
   const [items, setItems] = useState<ExtractedKnowledge[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
     let cancelled = false
 
-    async function fetch() {
+    async function load() {
       setLoading(true)
       const { data, error: err } = await supabase
         .from('extracted_knowledge')
@@ -22,13 +23,14 @@ export function useExtractedKnowledge() {
         setError(err.message)
       } else {
         setItems(data ?? [])
+        setError(null)
       }
       setLoading(false)
     }
 
-    fetch()
+    load()
     return () => { cancelled = true }
-  }, [])
+  }, [refreshKey])
 
-  return { items, loading, error }
+  return { items, loading, error, refresh: () => setRefreshKey(k => k + 1) }
 }
