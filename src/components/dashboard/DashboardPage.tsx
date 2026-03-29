@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
-import { BarChart2, ChevronDown } from 'lucide-react'
+import { BarChart2, ChevronDown, X } from 'lucide-react'
 import { useAgentStats } from '../../hooks/useAgentStats'
 import { useCyclePlan } from '../../hooks/useCyclePlan'
 import type { CyclePlanPhase, Task } from '../../types'
@@ -76,7 +76,48 @@ const ASSIGNEE_LABEL: Record<string, string> = {
   user:   'Артур',
 }
 
-function PhaseTaskList({ tasks }: { tasks: Task[] }) {
+function TaskDetailModal({ task, onClose }: { task: Task; onClose: () => void }) {
+  const cfg = TASK_STATUS_CFG[task.status ?? 'backlog'] ?? TASK_STATUS_CFG.backlog
+  return (
+    <div className="fixed inset-0 z-50 flex items-end" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60" />
+      <div
+        className="relative w-full bg-[#13131a] rounded-t-3xl max-h-[75dvh] flex flex-col shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex justify-center pt-3 pb-1 shrink-0">
+          <div className="w-10 h-1 bg-white/20 rounded-full" />
+        </div>
+        <div className="flex items-center justify-between px-5 py-3 shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="text-sm">{cfg.icon}</span>
+            <span className={`text-xs font-medium px-2 py-0.5 rounded-full bg-white/5 ${cfg.cls}`}>
+              {task.status ?? 'backlog'}
+            </span>
+            {task.assignee && ASSIGNEE_LABEL[task.assignee] && (
+              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-white/5 text-slate-400">
+                {ASSIGNEE_LABEL[task.assignee]}
+              </span>
+            )}
+          </div>
+          <button onClick={onClose} className="text-slate-500 active:text-slate-300 transition-colors">
+            <X size={20} />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 pb-8 space-y-3">
+          <p className="text-slate-100 text-base font-semibold leading-snug">{task.title}</p>
+          {task.description ? (
+            <p className="text-slate-400 text-sm leading-relaxed whitespace-pre-wrap">{task.description}</p>
+          ) : (
+            <p className="text-slate-600 text-sm italic">Описание не указано</p>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PhaseTaskList({ tasks, onOpen }: { tasks: Task[]; onOpen: (t: Task) => void }) {
   if (tasks.length === 0) {
     return <p className="text-xs text-slate-600 py-1 pl-1">Задач нет</p>
   }
@@ -85,7 +126,11 @@ function PhaseTaskList({ tasks }: { tasks: Task[] }) {
       {tasks.map(task => {
         const cfg = TASK_STATUS_CFG[task.status ?? 'backlog'] ?? TASK_STATUS_CFG.backlog
         return (
-          <div key={task.id} className="flex items-start gap-2">
+          <button
+            key={task.id}
+            onClick={() => onOpen(task)}
+            className="w-full flex items-start gap-2 text-left active:opacity-60 transition-opacity"
+          >
             <span className="text-xs shrink-0 mt-0.5">{cfg.icon}</span>
             <p className={`flex-1 text-xs leading-snug line-clamp-1 ${cfg.cls}`}>{task.title}</p>
             {task.assignee && ASSIGNEE_LABEL[task.assignee] && (
@@ -93,7 +138,7 @@ function PhaseTaskList({ tasks }: { tasks: Task[] }) {
                 {ASSIGNEE_LABEL[task.assignee]}
               </span>
             )}
-          </div>
+          </button>
         )
       })}
     </div>
@@ -106,6 +151,7 @@ function CycleWidget() {
   const activePhaseNum = phases.find(p => p.status === 'active')?.number ?? null
   const [expanded, setExpanded] = useState<number | null>(null)
   const [initialised, setInitialised] = useState(false)
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null)
 
   // Set default expansion once when plan first loads
   useEffect(() => {
@@ -191,13 +237,15 @@ function CycleWidget() {
                   {isActive && phase.description && (
                     <p className="text-xs text-slate-500 mb-2 leading-relaxed">{phase.description}</p>
                   )}
-                  <PhaseTaskList tasks={phaseTasks} />
+                  <PhaseTaskList tasks={phaseTasks} onOpen={setSelectedTask} />
                 </div>
               )}
             </div>
           )
         })}
       </div>
+
+      {selectedTask && <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} />}
     </div>
   )
 }
