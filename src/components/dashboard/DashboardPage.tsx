@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { BarChart2, ChevronDown } from 'lucide-react'
 import { useAgentStats } from '../../hooks/useAgentStats'
@@ -104,12 +104,16 @@ function CycleWidget() {
   const { plan, tasksByPhase, loading } = useCyclePlan()
   const phases = plan?.phases ?? []
   const activePhaseNum = phases.find(p => p.status === 'active')?.number ?? null
-  const [expanded, setExpanded] = useState<number | null>(activePhaseNum)
+  const [expanded, setExpanded] = useState<number | null>(null)
+  const [initialised, setInitialised] = useState(false)
 
-  // sync default expansion when plan loads
-  if (plan && expanded === null && activePhaseNum !== null) {
-    setExpanded(activePhaseNum)
-  }
+  // Set default expansion once when plan first loads
+  useEffect(() => {
+    if (!initialised && activePhaseNum !== null) {
+      setExpanded(activePhaseNum)
+      setInitialised(true)
+    }
+  }, [initialised, activePhaseNum])
 
   if (loading) return null
 
@@ -153,7 +157,7 @@ function CycleWidget() {
             >
               {/* Phase header — clickable */}
               <button
-                onClick={() => setExpanded(isOpen ? null : phase.number)}
+                onClick={() => setExpanded(prev => prev === phase.number ? null : phase.number)}
                 className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left"
               >
                 <span className="text-sm shrink-0">{PHASE_ICON[phase.status]}</span>
