@@ -19,7 +19,7 @@ const TYPE_COLORS: Record<string, string> = {
 }
 
 function scoreBar(value: number | null, color: string) {
-  if (value == null) return null
+  if (value == null || isNaN(value)) return <span className="text-[10px] text-slate-600">—</span>
   const pct = Math.round(value * 100)
   return (
     <div className="flex items-center gap-1.5">
@@ -135,7 +135,7 @@ function KnowledgeModal({ item, onClose }: { item: ExtractedKnowledge; onClose: 
 function KnowledgeCard({ item, onOpen }: { item: ExtractedKnowledge; onOpen: (i: ExtractedKnowledge) => void }) {
   const typeColor = (item.knowledge_type && TYPE_COLORS[item.knowledge_type]) ?? 'bg-slate-800 text-slate-400'
   const routedColor = (item.routed_to && ROUTED_COLORS[item.routed_to]) ?? 'bg-slate-800 text-slate-400'
-  const dateStr = new Date(item.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
+  const dateStr = new Date(item.created_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 
   return (
     <button

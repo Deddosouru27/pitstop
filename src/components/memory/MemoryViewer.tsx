@@ -54,7 +54,7 @@ function MemoryCard({ memory, onOpen }: { memory: Memory; onOpen: (m: Memory) =>
           </span>
         ))}
         <span className="text-[10px] text-slate-600 ml-auto">
-          {new Date(memory.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+          {new Date(memory.created_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
         </span>
       </div>
     </button>

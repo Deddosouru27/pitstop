@@ -95,7 +95,7 @@ export default function IntakeViewer({ ideas, projects, onConvert, onDelete, onO
                 </div>
               )}
               <span className="text-[10px] text-slate-600 ml-auto">
-                {new Date(idea.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+                {new Date(idea.created_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
               </span>
             </div>
 
