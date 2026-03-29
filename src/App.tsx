@@ -8,6 +8,7 @@ import CalendarTab from './components/calendar/CalendarTab'
 import IdeasTab from './components/ideas/IdeasTab'
 import DashboardPage from './components/dashboard/DashboardPage'
 import MemoryViewer from './components/memory/MemoryViewer'
+import KnowledgePage from './components/knowledge/KnowledgePage'
 import SettingsPage from './components/settings/SettingsPage'
 
 function AppShell() {
@@ -24,6 +25,7 @@ function AppShell() {
           <Route path="/ideas" element={<IdeasTab />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/memory" element={<MemoryViewer />} />
+          <Route path="/knowledge" element={<KnowledgePage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/projects" replace />} />
         </Routes>

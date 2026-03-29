@@ -50,7 +50,7 @@ function IdeaCard({
       onClick={() => onOpen(idea)}
       className="w-full text-left bg-white/5 rounded-2xl p-4 space-y-2 active:opacity-60 transition-opacity border border-white/[0.06]"
     >
-      <p className="text-slate-100 text-sm font-medium line-clamp-1 overflow-hidden">{title}</p>
+      <p className="text-slate-100 text-sm font-medium line-clamp-2 overflow-hidden text-ellipsis">{title}</p>
       <div className="flex items-center gap-2">
         {idea.ai_category && (
           <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${categoryClass}`}>

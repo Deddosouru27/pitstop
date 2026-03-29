@@ -1,20 +1,19 @@
 import { ArrowRight, Trash2, Globe } from 'lucide-react'
 import type { Idea, Project } from '../../types'
 
-export const INTAKE_SOURCES = new Set([
+export const INTAKE_SOURCE_TYPES = new Set([
   'youtube', 'instagram', 'article', 'url', 'twitter', 'threads', 'thread',
-  'video', 'research', 'text',
+  'video', 'research', 'text', 'link',
 ])
 
-/** Returns the effective source value checking both source_type and source fields */
-export function getIdeaSource(idea: { source?: string | null; source_type?: string | null }): string | null {
-  return idea.source_type ?? idea.source ?? null
+/** Returns the effective source value */
+export function getIdeaSource(idea: { source_type?: string | null }): string | null {
+  return idea.source_type ?? null
 }
 
-/** An idea is from Intake if source_type is set (non-empty), or source matches known intake values */
-export function isIntakeIdea(idea: { source?: string | null; source_type?: string | null }): boolean {
-  if (idea.source_type != null && idea.source_type !== '') return true
-  return idea.source != null && idea.source !== '' && INTAKE_SOURCES.has(idea.source)
+/** An idea is from Intake if source_type matches a known intake value */
+export function isIntakeIdea(idea: { source_type?: string | null }): boolean {
+  return idea.source_type != null && INTAKE_SOURCE_TYPES.has(idea.source_type)
 }
 
 const SOURCE_CONFIG: Record<string, { label: string; emoji: string; color: string }> = {
@@ -101,7 +100,7 @@ export default function IntakeViewer({ ideas, projects, onConvert, onDelete, onO
             </div>
 
             {/* Title */}
-            <p className="text-slate-100 text-sm font-medium line-clamp-1 overflow-hidden">{title}</p>
+            <p className="text-slate-100 text-sm font-medium line-clamp-2 overflow-hidden text-ellipsis">{title}</p>
 
             {/* Actions */}
             {idea.converted_to_task ? (

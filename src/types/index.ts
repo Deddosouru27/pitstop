@@ -98,6 +98,23 @@ export interface Memory {
   created_at: string
 }
 
+export interface ExtractedKnowledge {
+  id: string
+  content: string
+  knowledge_type: string | null
+  project_id: string | null
+  immediate_relevance: number | null
+  strategic_relevance: number | null
+  novelty: number | null
+  effort: number | null
+  has_ready_code: boolean | null
+  routed_to: string | null
+  tags: string[] | null
+  source_url: string | null
+  source_type: string | null
+  created_at: string
+}
+
 export type Theme = 'dark' | 'light'
 export type Language = 'ru' | 'en'
 

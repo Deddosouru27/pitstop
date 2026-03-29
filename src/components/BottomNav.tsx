@@ -1,11 +1,12 @@
 import { NavLink } from 'react-router-dom'
-import { FolderOpen, Lightbulb, BarChart2, Brain, Settings } from 'lucide-react'
+import { FolderOpen, Lightbulb, BarChart2, Brain, BookOpen, Settings } from 'lucide-react'
 
 const tabs = [
   { to: '/projects',   icon: FolderOpen, label: 'Projects',  end: false },
   { to: '/ideas',      icon: Lightbulb,  label: 'Ideas',     end: false },
-  { to: '/dashboard',  icon: BarChart2,  label: 'Dashboard', end: false },
+  { to: '/dashboard',  icon: BarChart2,  label: 'Stats',     end: false },
   { to: '/memory',     icon: Brain,      label: 'Memory',    end: false },
+  { to: '/knowledge',  icon: BookOpen,   label: 'Knowledge', end: false },
   { to: '/settings',   icon: Settings,   label: 'Settings',  end: false },
 ]
 
