@@ -331,6 +331,7 @@ export default function KnowledgePage() {
   const [showPaste, setShowPaste] = useState(false)
   const [typeFilter, setTypeFilter] = useState<string>('all')
   const [routeFilter, setRouteFilter] = useState<string>('all')
+  const [sourceFilter, setSourceFilter] = useState<string>('all')
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<SortKey>('date')
   const [selected, setSelected] = useState<ExtractedKnowledge | null>(null)
@@ -353,10 +354,20 @@ export default function KnowledgePage() {
     return counts
   }, [items])
 
+  const sourceCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const i of items) {
+      const key = i.source_type ?? 'text'
+      counts[key] = (counts[key] ?? 0) + 1
+    }
+    return counts
+  }, [items])
+
   const filtered = useMemo(() => {
     let result = items.filter(i => {
       if (typeFilter !== 'all' && i.knowledge_type !== typeFilter) return false
       if (routeFilter !== 'all' && i.routed_to !== routeFilter) return false
+      if (sourceFilter !== 'all' && (i.source_type ?? 'text') !== sourceFilter) return false
       if (search.trim() && !i.content.toLowerCase().includes(search.toLowerCase())) return false
       return true
     })
@@ -367,7 +378,7 @@ export default function KnowledgePage() {
     }
     // default: date order preserved from fetch
     return result
-  }, [items, typeFilter, routeFilter, search, sortBy])
+  }, [items, typeFilter, routeFilter, sourceFilter, search, sortBy])
 
   if (loading) {
     return <div className="flex items-center justify-center h-48 text-slate-500 text-sm">Loading...</div>
@@ -462,6 +473,52 @@ export default function KnowledgePage() {
           </button>
         ))}
       </div>
+
+      {/* Source type filter chips */}
+      {Object.keys(sourceCounts).length > 0 && (
+        <div className="px-4 pb-2 flex gap-2 overflow-x-auto scrollbar-hide">
+          <button
+            onClick={() => setSourceFilter('all')}
+            className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
+              sourceFilter === 'all' ? 'bg-purple-600 text-white' : 'bg-white/5 text-slate-400 active:bg-white/10'
+            }`}
+          >
+            Все
+          </button>
+          {(['youtube', 'instagram', 'link', 'text', 'manual-paste'] as const)
+            .filter(s => sourceCounts[s] > 0)
+            .map(s => {
+              const cfg = SOURCE_TYPE_CFG[s]
+              return (
+                <button
+                  key={s}
+                  onClick={() => setSourceFilter(s)}
+                  className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
+                    sourceFilter === s ? 'bg-purple-600 text-white' : 'bg-white/5 text-slate-400 active:bg-white/10'
+                  }`}
+                >
+                  {cfg.label} ({sourceCounts[s]})
+                </button>
+              )
+            })
+          }
+          {/* Any unknown source_types not in the preset list */}
+          {Object.keys(sourceCounts)
+            .filter(s => !['youtube', 'instagram', 'link', 'text', 'manual-paste'].includes(s))
+            .map(s => (
+              <button
+                key={s}
+                onClick={() => setSourceFilter(s)}
+                className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
+                  sourceFilter === s ? 'bg-purple-600 text-white' : 'bg-white/5 text-slate-400 active:bg-white/10'
+                }`}
+              >
+                {s} ({sourceCounts[s]})
+              </button>
+            ))
+          }
+        </div>
+      )}
 
       {/* Type filter chips */}
       {types.length > 0 && (
