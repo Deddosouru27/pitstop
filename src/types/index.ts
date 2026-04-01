@@ -155,6 +155,15 @@ export interface IngestedContent {
   created_at: string
 }
 
+export interface KnowledgeDomain {
+  id: string
+  name: string
+  description: string | null
+  priority: 'critical' | 'high' | 'medium' | 'low'
+  created_at: string
+  updated_at: string
+}
+
 export type Theme = 'dark' | 'light'
 export type Language = 'ru' | 'en'
 
