@@ -233,9 +233,19 @@ function KnowledgeCard({ item, onOpen }: { item: ExtractedKnowledge; onOpen: (i:
 
 const INTAKE_URL = 'https://maos-intake.vercel.app/process'
 
+const SOURCE_OPTIONS = [
+  { label: 'YouTube видео',  value: 'youtube' },
+  { label: 'Instagram Reel', value: 'instagram' },
+  { label: 'Telegram канал', value: 'telegram' },
+  { label: 'Статья/блог',    value: 'article' },
+  { label: 'Подкаст',        value: 'podcast' },
+  { label: 'Книга',          value: 'book' },
+  { label: 'Другое',         value: 'text' },
+] as const
+
 function PasteModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const [title, setTitle] = useState('')
-  const [sourceType, setSourceType] = useState('')
+  const [sourceType, setSourceType] = useState<string>('youtube')
   const [text, setText] = useState('')
   const [status, setStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle')
   const [errMsg, setErrMsg] = useState('')
@@ -252,7 +262,7 @@ function PasteModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: ()
           url: 'manual-paste',
           text: trimmed,
           title: title.trim() || undefined,
-          source_type: sourceType.trim() || 'text',
+          source_type: sourceType,
         }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -289,13 +299,17 @@ function PasteModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: ()
             placeholder="Заголовок (опционально)"
             className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-100 placeholder-slate-500 outline-none focus:border-purple-500/50 transition-colors"
           />
-          <input
-            type="text"
+          <select
             value={sourceType}
             onChange={e => setSourceType(e.target.value)}
-            placeholder="Источник: YouTube видео, Instagram Reel, Статья..."
-            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-100 placeholder-slate-500 outline-none focus:border-purple-500/50 transition-colors"
-          />
+            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-100 outline-none focus:border-purple-500/50 transition-colors appearance-none"
+          >
+            {SOURCE_OPTIONS.map(o => (
+              <option key={o.value} value={o.value} className="bg-[#1c1c27]">
+                {o.label}
+              </option>
+            ))}
+          </select>
           <textarea
             value={text}
             onChange={e => setText(e.target.value)}
