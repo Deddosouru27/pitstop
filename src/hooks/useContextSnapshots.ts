@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -73,6 +74,33 @@ export interface ContextSnapshot {
   snapshot_type: SnapshotType
   content: SnapshotContent
   created_at: string
+}
+
+// ── Hook: all snapshots across all projects ───────────────────────────────────
+
+export function useAllSnapshots() {
+  const [snapshots, setSnapshots] = useState<ContextSnapshot[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      setLoading(true)
+      const { data, error: err } = await supabase
+        .from('context_snapshots')
+        .select('*')
+        .order('created_at', { ascending: false })
+      if (cancelled) return
+      if (err) setError(err.message)
+      else { setSnapshots(data ?? []); setError(null) }
+      setLoading(false)
+    }
+    load()
+    return () => { cancelled = true }
+  }, [])
+
+  return { snapshots, loading, error }
 }
 
 // ── Standalone functions ──────────────────────────────────────────────────────
