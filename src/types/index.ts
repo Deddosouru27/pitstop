@@ -138,6 +138,20 @@ export interface ExtractedKnowledge {
   source_url: string | null
   source_type: string | null
   business_value: string | null
+  ingested_content_id?: string | null
+  created_at: string
+}
+
+export interface IngestedContent {
+  id: string
+  title: string | null
+  source_type: string | null
+  source_url: string | null
+  processing_status: string | null
+  raw_text: string | null
+  summary: string | null
+  routing_result: Record<string, unknown> | null
+  knowledge_count: number | null
   created_at: string
 }
 

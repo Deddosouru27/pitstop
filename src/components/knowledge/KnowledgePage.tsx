@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
-import { BookOpen, X, ExternalLink, Search } from 'lucide-react'
+import { BookOpen, X, ExternalLink, Search, FileText } from 'lucide-react'
+import { supabase } from '../../lib/supabase'
 import { useExtractedKnowledge } from '../../hooks/useExtractedKnowledge'
 import type { ExtractedKnowledge } from '../../types'
 
@@ -52,6 +53,20 @@ function scoreBar(value: number | null, color: string) {
 function KnowledgeModal({ item, onClose }: { item: ExtractedKnowledge; onClose: () => void }) {
   const typeColor = (item.knowledge_type && TYPE_COLORS[item.knowledge_type]) ?? 'bg-slate-800 text-slate-400'
   const routedColor = (item.routed_to && ROUTED_COLORS[item.routed_to]) ?? 'bg-slate-800 text-slate-400'
+  const [rawText, setRawText] = useState<string | null>(null)
+  const [rawLoading, setRawLoading] = useState(false)
+
+  async function loadRaw() {
+    if (!item.ingested_content_id) return
+    setRawLoading(true)
+    const { data } = await supabase
+      .from('ingested_content')
+      .select('raw_text')
+      .eq('id', item.ingested_content_id)
+      .single()
+    setRawText(data?.raw_text ?? null)
+    setRawLoading(false)
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end animate-fade-in" onClick={onClose}>
@@ -137,6 +152,29 @@ function KnowledgeModal({ item, onClose }: { item: ExtractedKnowledge; onClose: 
               <ExternalLink size={12} />
               <span className="truncate">{item.source_url}</span>
             </a>
+          )}
+
+          <button
+            onClick={loadRaw}
+            disabled={!item.ingested_content_id || rawLoading || rawText !== null}
+            className="flex items-center gap-2 text-xs text-slate-400 bg-white/5 active:bg-white/10 disabled:opacity-40 px-3 py-2 rounded-xl transition-colors w-fit"
+          >
+            <FileText size={13} />
+            {rawLoading ? 'Загрузка...' : rawText !== null ? 'Текст загружен' : 'Показать исходный текст'}
+          </button>
+
+          {rawText !== null && (
+            <div>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider font-medium mb-1">
+                Raw text · {rawText.length} chars
+              </p>
+              <textarea
+                readOnly
+                value={rawText}
+                style={{ minHeight: '200px', maxHeight: '360px' }}
+                className="w-full bg-white/5 border border-white/[0.06] rounded-xl px-3 py-2.5 text-xs text-slate-400 resize-none outline-none font-mono leading-relaxed"
+              />
+            </div>
           )}
 
           <p className="text-xs text-slate-600 border-t border-white/[0.06] pt-3">
