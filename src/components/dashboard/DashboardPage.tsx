@@ -3,9 +3,18 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 import { BarChart2, ChevronDown, X } from 'lucide-react'
 import { useAgentStats } from '../../hooks/useAgentStats'
 import { useCyclePlan } from '../../hooks/useCyclePlan'
+import { useKnowledgeStats } from '../../hooks/useKnowledgeStats'
 import type { CyclePlanPhase, Task } from '../../types'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+function timeAgo(dateStr: string): string {
+  const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
+  if (diff < 60) return `${diff} сек назад`
+  if (diff < 3600) return `${Math.floor(diff / 60)} мин назад`
+  if (diff < 86400) return `${Math.floor(diff / 3600)} ч назад`
+  return `${Math.floor(diff / 86400)} дн назад`
+}
 
 function formatDuration(seconds: number): string {
   if (seconds < 60) return `${seconds}с`
@@ -47,6 +56,38 @@ function CustomTooltip({
     <div className="bg-[#1c1c27] border border-white/10 rounded-xl px-3 py-2 text-xs text-slate-200">
       <p className="font-medium">{label}</p>
       <p className="text-slate-400">{payload[0].value} задач</p>
+    </div>
+  )
+}
+
+// ── Knowledge stats widget ────────────────────────────────────────────────────
+
+function KnowledgeStatsWidget() {
+  const { stats, loading } = useKnowledgeStats()
+  if (loading || !stats) return null
+  return (
+    <div className="bg-white/5 rounded-2xl px-4 py-4 border border-white/[0.06] space-y-3">
+      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">🧠 Knowledge Base</p>
+      <div className="grid grid-cols-3 gap-2">
+        <div className="text-center">
+          <p className="text-xl font-bold text-slate-100">{stats.total}</p>
+          <p className="text-[10px] text-slate-500 mt-0.5">знаний</p>
+        </div>
+        <div className="text-center">
+          <p className="text-xl font-bold text-red-400">{stats.hot}</p>
+          <p className="text-[10px] text-slate-500 mt-0.5">🔥 горячих</p>
+        </div>
+        <div className="text-center">
+          <p className="text-xl font-bold text-blue-400">{stats.archive}</p>
+          <p className="text-[10px] text-slate-500 mt-0.5">📚 архив</p>
+        </div>
+      </div>
+      <div className="flex items-center justify-between pt-1 border-t border-white/[0.04]">
+        <span className="text-[11px] text-slate-600">{stats.withEmbedding} с embedding</span>
+        {stats.lastIngestedAt && (
+          <span className="text-[11px] text-slate-600">📥 {timeAgo(stats.lastIngestedAt)}</span>
+        )}
+      </div>
     </div>
   )
 }
@@ -302,6 +343,9 @@ export default function DashboardPage() {
             sub="записей"
           />
         </div>
+
+        {/* Knowledge stats */}
+        <KnowledgeStatsWidget />
 
         {/* Bar chart */}
         <div className="bg-white/5 rounded-2xl px-4 pt-4 pb-2 border border-white/[0.06]">

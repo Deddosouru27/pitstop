@@ -69,10 +69,15 @@ function scoreBar(value: number | null, color: string) {
   )
 }
 
+type SimilarItem = { id: string; content: string; similarity: number; knowledge_type: string | null }
+
 function KnowledgeModal({ item, onClose }: { item: ExtractedKnowledge; onClose: () => void }) {
   const typeColor = (item.knowledge_type && TYPE_COLORS[item.knowledge_type]) ?? 'bg-slate-800 text-slate-400'
   const [rawText, setRawText] = useState<string | null>(null)
   const [rawLoading, setRawLoading] = useState(false)
+  const [similar, setSimilar] = useState<SimilarItem[] | null>(null)
+  const [similarLoading, setSimilarLoading] = useState(false)
+  const [similarError, setSimilarError] = useState<string | null>(null)
 
   async function loadRaw() {
     if (!item.ingested_content_id) return
@@ -84,6 +89,37 @@ function KnowledgeModal({ item, onClose }: { item: ExtractedKnowledge; onClose: 
       .single()
     setRawText(data?.raw_text ?? null)
     setRawLoading(false)
+  }
+
+  async function loadSimilar() {
+    setSimilarLoading(true)
+    setSimilarError(null)
+    try {
+      // Fetch embedding for this item only
+      const { data: embData, error: embErr } = await supabase
+        .from('extracted_knowledge')
+        .select('embedding')
+        .eq('id', item.id)
+        .single()
+      if (embErr) throw new Error(embErr.message)
+      const embedding = (embData as { embedding: unknown }).embedding
+      if (!embedding) { setSimilar([]); setSimilarLoading(false); return }
+
+      const { data: matches, error: rpcErr } = await supabase.rpc('match_knowledge', {
+        query_embedding: embedding,
+        match_threshold: 0.65,
+        match_count: 4,
+      })
+      if (rpcErr) throw new Error(rpcErr.message)
+      const results = ((matches as SimilarItem[]) ?? [])
+        .filter(m => m.id !== item.id)
+        .slice(0, 3)
+      setSimilar(results)
+    } catch (e) {
+      setSimilarError(e instanceof Error ? e.message : 'Ошибка')
+      setSimilar([])
+    }
+    setSimilarLoading(false)
   }
 
   return (
@@ -167,6 +203,42 @@ function KnowledgeModal({ item, onClose }: { item: ExtractedKnowledge; onClose: 
               <span className="truncate">{item.source_url}</span>
             </a>
           )}
+
+          {/* Similar knowledge */}
+          <div>
+            <button
+              onClick={loadSimilar}
+              disabled={similarLoading || similar !== null}
+              className="flex items-center gap-2 text-xs text-slate-400 bg-white/5 active:bg-white/10 disabled:opacity-40 px-3 py-2 rounded-xl transition-colors w-fit"
+            >
+              🔗 {similarLoading ? 'Поиск...' : similar !== null ? 'Похожие загружены' : 'Похожие знания'}
+            </button>
+            {similar !== null && similar.length === 0 && !similarError && (
+              <p className="text-xs text-slate-600 mt-2 italic">Похожих не найдено</p>
+            )}
+            {similarError && (
+              <p className="text-xs text-red-400 mt-2">{similarError}</p>
+            )}
+            {similar && similar.length > 0 && (
+              <div className="mt-2 space-y-2">
+                {similar.map(s => (
+                  <div key={s.id} className="bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2.5 space-y-1">
+                    <p className="text-xs text-slate-300 leading-relaxed line-clamp-3">{s.content}</p>
+                    <div className="flex items-center gap-2">
+                      {s.knowledge_type && (
+                        <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full ${TYPE_COLORS[s.knowledge_type] ?? 'bg-slate-800 text-slate-400'}`}>
+                          {s.knowledge_type}
+                        </span>
+                      )}
+                      <span className="text-[9px] text-slate-600 ml-auto">
+                        {Math.round(s.similarity * 100)}% похожесть
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           <button
             onClick={loadRaw}
