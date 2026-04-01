@@ -109,6 +109,7 @@ export interface Idea {
   summary?: string | null
   source?: string | null
   source_type?: string | null
+  relevance?: string | null
   extracted_ideas?: string[] | null
   created_at: string
 }

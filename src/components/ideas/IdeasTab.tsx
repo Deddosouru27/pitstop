@@ -26,6 +26,14 @@ const CATEGORY_COLORS: Record<string, string> = {
   other:     'bg-slate-800 text-slate-400',
 }
 
+const SOURCE_TYPE_CFG: Record<string, { label: string; cls: string }> = {
+  youtube:        { label: '▶ YouTube',   cls: 'bg-red-900/50 text-red-400' },
+  instagram:      { label: '◈ Instagram', cls: 'bg-pink-900/50 text-pink-400' },
+  link:           { label: '🔗 Link',      cls: 'bg-blue-900/50 text-blue-400' },
+  text:           { label: '📄 Text',      cls: 'bg-slate-800 text-slate-400' },
+  'manual-paste': { label: '📋 Paste',     cls: 'bg-slate-800 text-slate-400' },
+}
+
 function IdeaCard({
   idea,
   projectName,
@@ -51,7 +59,20 @@ function IdeaCard({
       className="w-full text-left bg-white/5 rounded-2xl p-4 space-y-2 active:opacity-60 transition-opacity border border-white/[0.06]"
     >
       <p className="text-slate-100 text-sm font-medium line-clamp-2 overflow-hidden text-ellipsis">{title}</p>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
+        {idea.relevance === 'hot' && (
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-600/30 text-purple-300 border border-purple-500/30">
+            🔥 Hot
+          </span>
+        )}
+        {idea.source_type && (() => {
+          const cfg = SOURCE_TYPE_CFG[idea.source_type] ?? { label: idea.source_type, cls: 'bg-slate-800 text-slate-400' }
+          return (
+            <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${cfg.cls}`}>
+              {cfg.label}
+            </span>
+          )
+        })()}
         {idea.ai_category && (
           <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${categoryClass}`}>
             {label}
