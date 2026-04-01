@@ -126,7 +126,7 @@ function IngestedModal({ item, onClose }: { item: IngestedContent; onClose: () =
   )
 }
 
-function IngestedCard({ item, onOpen }: { item: IngestedContent; onOpen: (i: IngestedContent) => void }) {
+function IngestedCard({ item, attempts, onOpen }: { item: IngestedContent; attempts: number; onOpen: (i: IngestedContent) => void }) {
   const dateStr = new Date(item.created_at).toLocaleString('ru-RU', {
     day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
   })
@@ -157,6 +157,11 @@ function IngestedCard({ item, onOpen }: { item: IngestedContent; onOpen: (i: Ing
             }
           </span>
         )}
+        {attempts > 1 && (
+          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-900/40 text-amber-500">
+            {attempts} попытки
+          </span>
+        )}
       </div>
     </button>
   )
@@ -167,15 +172,31 @@ export default function IngestedPage() {
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<IngestedContent | null>(null)
 
+  // Deduplicate by source_url (items already sorted DESC → first = latest per URL)
+  const deduped = useMemo(() => {
+    const seen = new Map<string, { item: IngestedContent; count: number }>()
+    const noUrlItems: { item: IngestedContent; count: number }[] = []
+    for (const item of items) {
+      if (!item.source_url) {
+        noUrlItems.push({ item, count: 1 })
+      } else if (seen.has(item.source_url)) {
+        seen.get(item.source_url)!.count++
+      } else {
+        seen.set(item.source_url, { item, count: 1 })
+      }
+    }
+    return [...seen.values(), ...noUrlItems]
+  }, [items])
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return items
-    return items.filter(i =>
+    if (!q) return deduped
+    return deduped.filter(({ item: i }) =>
       (i.title ?? '').toLowerCase().includes(q) ||
       (i.summary ?? '').toLowerCase().includes(q) ||
       (i.source_url ?? '').toLowerCase().includes(q)
     )
-  }, [items, search])
+  }, [deduped, search])
 
   if (loading) {
     return <div className="flex items-center justify-center h-48 text-slate-500 text-sm">Loading...</div>
@@ -197,7 +218,7 @@ export default function IngestedPage() {
         <div className="flex items-center gap-2">
           <Inbox size={20} className="text-purple-400" strokeWidth={1.75} />
           <h1 className="flex-1 text-2xl font-bold text-slate-100">Сырьё</h1>
-          <span className="text-sm text-slate-500">{items.length}</span>
+          <span className="text-sm text-slate-500">{deduped.length}</span>
         </div>
       </div>
 
@@ -219,14 +240,14 @@ export default function IngestedPage() {
           <div className="flex flex-col items-center py-16 text-center space-y-1">
             <Inbox size={32} strokeWidth={1.5} className="text-slate-600 mb-2" />
             <p className="text-sm text-slate-500">
-              {items.length === 0 ? 'Сырьё пока не загружалось' : 'Ничего не найдено'}
+              {deduped.length === 0 ? 'Сырьё пока не загружалось' : 'Ничего не найдено'}
             </p>
             <p className="text-xs text-slate-600">
-              {items.length === 0 ? 'Отправь текст через "📥 Вставить текст" в Knowledge' : 'Попробуй другой запрос'}
+              {deduped.length === 0 ? 'Отправь текст через "📥 Вставить текст" в Knowledge' : 'Попробуй другой запрос'}
             </p>
           </div>
         ) : (
-          filtered.map(i => <IngestedCard key={i.id} item={i} onOpen={setSelected} />)
+          filtered.map(({ item, count }) => <IngestedCard key={item.id} item={item} attempts={count} onOpen={setSelected} />)
         )}
       </div>
 

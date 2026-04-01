@@ -139,6 +139,7 @@ export interface ExtractedKnowledge {
   source_type: string | null
   business_value: string | null
   ingested_content_id?: string | null
+  has_embedding?: boolean
   created_at: string
 }
 

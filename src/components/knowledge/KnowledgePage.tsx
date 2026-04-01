@@ -325,6 +325,9 @@ function KnowledgeCard({ item, onOpen }: { item: ExtractedKnowledge; onOpen: (i:
             🎯{item.strategic_relevance.toFixed(2)}
           </span>
         )}
+        <span className="text-[10px] ml-auto" title={item.has_embedding ? 'Embedding готов' : 'Без embedding'}>
+          {item.has_embedding ? '🧠' : '⚪'}
+        </span>
       </div>
 
       {/* source_url on card */}
@@ -371,13 +374,23 @@ const SOURCE_OPTIONS = [
 ] as const
 
 function PasteModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const [mode, setMode] = useState<'text' | 'url'>('text')
+
+  // Text mode state
   const [title, setTitle] = useState('')
   const [sourceType, setSourceType] = useState<string>('youtube')
   const [text, setText] = useState('')
+
+  // URL mode state
+  const [urlInput, setUrlInput] = useState('')
+  const [urlResult, setUrlResult] = useState<{ hot?: number; strategic?: number } | null>(null)
+
   const [status, setStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle')
   const [errMsg, setErrMsg] = useState('')
 
-  async function handleSubmit() {
+  function resetStatus() { setStatus('idle'); setErrMsg('') }
+
+  async function handleTextSubmit() {
     const trimmed = text.trim()
     if (!trimmed) return
     setStatus('loading')
@@ -385,16 +398,41 @@ function PasteModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: ()
       const res = await fetch(INTAKE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          url: 'manual-paste',
-          text: trimmed,
-          title: title.trim() || undefined,
-          source_type: sourceType,
-        }),
+        body: JSON.stringify({ url: 'manual-paste', text: trimmed, title: title.trim() || undefined, source_type: sourceType }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       setStatus('ok')
       setTimeout(() => { onSuccess(); onClose() }, 1500)
+    } catch (e) {
+      setErrMsg(e instanceof Error ? e.message : 'Неизвестная ошибка')
+      setStatus('error')
+    }
+  }
+
+  async function handleUrlSubmit() {
+    const trimmed = urlInput.trim()
+    if (!trimmed) return
+    setStatus('loading')
+    setUrlResult(null)
+    try {
+      const res = await fetch(INTAKE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: trimmed }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      let hot: number | undefined
+      let strategic: number | undefined
+      try {
+        const json = await res.json()
+        // Handle various response shapes from the intake API
+        const rr = json?.routing_result ?? json?.result ?? json
+        hot = rr?.hot ?? rr?.hot_backlog ?? json?.hot
+        strategic = rr?.strategic ?? rr?.knowledge_base ?? json?.strategic
+      } catch { /* ignore JSON parse errors */ }
+      setUrlResult({ hot, strategic })
+      setStatus('ok')
+      onSuccess()
     } catch (e) {
       setErrMsg(e instanceof Error ? e.message : 'Неизвестная ошибка')
       setStatus('error')
@@ -412,53 +450,101 @@ function PasteModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: ()
           <div className="w-10 h-1 bg-white/20 rounded-full" />
         </div>
         <div className="flex items-center justify-between px-5 py-3 shrink-0">
-          <p className="text-slate-100 font-semibold">📥 Вставить текст</p>
+          <p className="text-slate-100 font-semibold">📥 Capture</p>
           <button onClick={onClose} className="text-slate-500 active:text-slate-300 transition-colors">
             <X size={20} />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 pb-8 space-y-3">
-          <input
-            type="text"
-            value={title}
-            onChange={e => setTitle(e.target.value)}
-            placeholder="Заголовок (опционально)"
-            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-100 placeholder-slate-500 outline-none focus:border-purple-500/50 transition-colors"
-          />
-          <select
-            value={sourceType}
-            onChange={e => setSourceType(e.target.value)}
-            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-100 outline-none focus:border-purple-500/50 transition-colors appearance-none"
-          >
-            {SOURCE_OPTIONS.map(o => (
-              <option key={o.value} value={o.value} className="bg-[#1c1c27]">
-                {o.label}
-              </option>
+        {/* Mode tabs */}
+        <div className="px-5 pb-3 shrink-0">
+          <div className="flex bg-white/5 rounded-xl p-1 border border-white/[0.06]">
+            {([{ key: 'text', label: '📝 Текст' }, { key: 'url', label: '🔗 Ссылка' }] as const).map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => { setMode(tab.key); resetStatus() }}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                  mode === tab.key ? 'bg-purple-600 text-white' : 'text-slate-500 active:text-slate-300'
+                }`}
+              >
+                {tab.label}
+              </button>
             ))}
-          </select>
-          <textarea
-            value={text}
-            onChange={e => setText(e.target.value)}
-            placeholder="Вставь текст, транскрипт, конспект..."
-            style={{ minHeight: '200px' }}
-            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-100 placeholder-slate-500 outline-none focus:border-purple-500/50 transition-colors resize-none"
-          />
+          </div>
+        </div>
 
-          {status === 'ok' && (
-            <p className="text-emerald-400 text-sm font-medium text-center py-1">✅ Отправлено</p>
+        <div className="flex-1 overflow-y-auto px-5 pb-8 space-y-3">
+          {mode === 'text' ? (
+            <>
+              <input
+                type="text"
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                placeholder="Заголовок (опционально)"
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-100 placeholder-slate-500 outline-none focus:border-purple-500/50 transition-colors"
+              />
+              <select
+                value={sourceType}
+                onChange={e => setSourceType(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-100 outline-none focus:border-purple-500/50 transition-colors appearance-none"
+              >
+                {SOURCE_OPTIONS.map(o => (
+                  <option key={o.value} value={o.value} className="bg-[#1c1c27]">{o.label}</option>
+                ))}
+              </select>
+              <textarea
+                value={text}
+                onChange={e => setText(e.target.value)}
+                placeholder="Вставь текст, транскрипт, конспект..."
+                style={{ minHeight: '200px' }}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-100 placeholder-slate-500 outline-none focus:border-purple-500/50 transition-colors resize-none"
+              />
+              {status === 'ok' && <p className="text-emerald-400 text-sm font-medium text-center py-1">✅ Отправлено</p>}
+              {status === 'error' && <p className="text-red-400 text-sm text-center py-1">❌ {errMsg}</p>}
+              <button
+                onClick={handleTextSubmit}
+                disabled={!text.trim() || status === 'loading' || status === 'ok'}
+                className="w-full bg-purple-600 active:bg-purple-700 disabled:opacity-40 text-white font-semibold rounded-2xl py-3 text-sm transition-colors"
+              >
+                {status === 'loading' ? 'Отправка...' : 'Отправить в Brain'}
+              </button>
+            </>
+          ) : (
+            <>
+              <input
+                type="url"
+                value={urlInput}
+                onChange={e => setUrlInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleUrlSubmit() }}
+                placeholder="https://youtube.com/watch?v=..."
+                autoFocus
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-100 placeholder-slate-500 outline-none focus:border-purple-500/50 transition-colors"
+              />
+              <p className="text-[11px] text-slate-600">
+                YouTube, Instagram, статья — система автоматически извлечёт контент
+              </p>
+              {status === 'ok' && (
+                <div className="bg-emerald-900/20 border border-emerald-700/30 rounded-xl px-4 py-3 space-y-1">
+                  <p className="text-emerald-400 text-sm font-medium">✅ Принято в обработку</p>
+                  {(urlResult?.hot != null || urlResult?.strategic != null) && (
+                    <p className="text-xs text-slate-400">
+                      {urlResult?.hot != null && `🔥 ${urlResult.hot} hot`}
+                      {urlResult?.hot != null && urlResult?.strategic != null && ' · '}
+                      {urlResult?.strategic != null && `📚 ${urlResult.strategic} strategic`}
+                    </p>
+                  )}
+                </div>
+              )}
+              {status === 'error' && <p className="text-red-400 text-sm py-1">❌ {errMsg}</p>}
+              <button
+                onClick={handleUrlSubmit}
+                disabled={!urlInput.trim() || status === 'loading'}
+                className="w-full bg-purple-600 active:bg-purple-700 disabled:opacity-40 text-white font-semibold rounded-2xl py-3 text-sm transition-colors"
+              >
+                {status === 'loading' ? 'Обрабатываю...' : 'Обработать'}
+              </button>
+            </>
           )}
-          {status === 'error' && (
-            <p className="text-red-400 text-sm text-center py-1">❌ Ошибка: {errMsg}</p>
-          )}
-
-          <button
-            onClick={handleSubmit}
-            disabled={!text.trim() || status === 'loading' || status === 'ok'}
-            className="w-full bg-purple-600 active:bg-purple-700 disabled:opacity-40 text-white font-semibold rounded-2xl py-3 text-sm transition-colors"
-          >
-            {status === 'loading' ? 'Отправка...' : 'Отправить в Brain'}
-          </button>
         </div>
       </div>
     </div>
