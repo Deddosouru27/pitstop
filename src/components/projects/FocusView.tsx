@@ -190,18 +190,30 @@ export default function FocusView({
             </div>
           )}
 
-          {/* Copy handoff button */}
-          <button
-            onClick={handleCopyHandoff}
-            disabled={copyLoading}
-            className="w-full flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 disabled:opacity-50 text-slate-300 hover:text-slate-100 text-sm font-medium px-4 py-2.5 rounded-xl transition-colors"
-          >
-            {copied ? (
-              <><Check size={14} className="text-green-400" /> Скопировано!</>
-            ) : (
-              <><Copy size={14} /> Скопировать handoff</>
-            )}
-          </button>
+          {/* Action buttons */}
+          <div className="flex gap-2">
+            <button
+              onClick={handleCopyHandoff}
+              disabled={copyLoading}
+              className="flex-1 flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 disabled:opacity-50 text-slate-300 hover:text-slate-100 text-sm font-medium px-4 py-2.5 rounded-xl transition-colors"
+            >
+              {copied ? (
+                <><Check size={14} className="text-green-400" /> Скопировано!</>
+              ) : (
+                <><Copy size={14} /> Handoff</>
+              )}
+            </button>
+            <button
+              onClick={onUpdateContext}
+              disabled={updatingContext}
+              className="flex items-center justify-center gap-1.5 bg-white/5 hover:bg-white/10 disabled:opacity-50 text-slate-400 hover:text-slate-200 text-sm font-medium px-3 py-2.5 rounded-xl transition-colors"
+            >
+              {updatingContext
+                ? <Loader2 size={14} className="animate-spin" />
+                : <Sparkles size={14} />
+              }
+            </button>
+          </div>
         </div>
       ) : (
         <div className="bg-surface rounded-2xl p-5 text-center space-y-3">

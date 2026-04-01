@@ -73,23 +73,29 @@ export function useCyclePlan() {
     },
   )
 
-  // Realtime for tasks belonging to this plan
+  // Realtime for tasks — no server-side filter (column filters require replica identity FULL)
+  // Handle client-side: only refetch if the changed task belongs to our plan
   useEffect(() => {
     if (!plan) return
     const planId = plan.id
+
+    async function refetch() {
+      const { data } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('cycle_plan_id', planId)
+        .order('created_at', { ascending: true })
+      if (data) setTasksByPhase(groupByPhase(data))
+    }
 
     const channel = supabase
       .channel(`realtime-cycle-plan-tasks-${planId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'tasks', filter: `cycle_plan_id=eq.${planId}` },
-        () => {
-          supabase
-            .from('tasks')
-            .select('*')
-            .eq('cycle_plan_id', planId)
-            .order('created_at', { ascending: true })
-            .then(({ data }) => { if (data) setTasksByPhase(groupByPhase(data)) })
+        { event: '*', schema: 'public', table: 'tasks' },
+        (payload) => {
+          const record = (payload.new && Object.keys(payload.new).length > 0 ? payload.new : payload.old) as Partial<Task>
+          if (record?.cycle_plan_id === planId) refetch()
         },
       )
       .subscribe()
@@ -97,5 +103,9 @@ export function useCyclePlan() {
     return () => { supabase.removeChannel(channel) }
   }, [plan?.id])
 
-  return { plan, tasksByPhase, loading }
+  const allTasks = Object.values(tasksByPhase).flat()
+  const doneTasks = allTasks.filter(t => t.status === 'done' || t.is_completed).length
+  const progress = allTasks.length > 0 ? Math.round(doneTasks / allTasks.length * 100) : 0
+
+  return { plan, tasksByPhase, loading, progress, doneTasks, totalTasks: allTasks.length }
 }

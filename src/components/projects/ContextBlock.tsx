@@ -1,4 +1,4 @@
-import { Sparkles, Loader2, Check } from 'lucide-react'
+import { Sparkles, Loader2, Check, AlertTriangle } from 'lucide-react'
 import type { Project } from '../../types'
 
 interface Props {
@@ -9,6 +9,11 @@ interface Props {
   countdown?: number | null
 }
 
+function isStale(lastSessionAt: string | null): boolean {
+  if (!lastSessionAt) return false
+  return Date.now() - new Date(lastSessionAt).getTime() > 24 * 60 * 60 * 1000
+}
+
 export default function ContextBlock({
   project,
   onUpdate,
@@ -17,6 +22,7 @@ export default function ContextBlock({
   countdown = null,
 }: Props) {
   const hasContext = project.ai_what_done || project.ai_where_stopped || project.ai_next_step
+  const stale = isStale(project.last_session_at)
 
   const pendingText = countdown !== null && countdown > 0
     ? `Обновление контекста через ${countdown} сек...`
@@ -25,13 +31,23 @@ export default function ContextBlock({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">AI Контекст</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">AI Контекст</h2>
+          {stale && hasContext && (
+            <span className="flex items-center gap-1 text-[10px] font-medium text-amber-400 bg-amber-900/30 border border-amber-700/30 px-1.5 py-0.5 rounded-full">
+              <AlertTriangle size={9} />
+              Устарел
+            </span>
+          )}
+        </div>
         <button
           onClick={onUpdate}
           disabled={updating}
           className={`flex items-center gap-1.5 text-xs font-semibold px-3.5 py-1.5 rounded-xl transition-colors disabled:opacity-60 ${
             justUpdated
               ? 'bg-success/20 text-success'
+              : stale && hasContext
+              ? 'bg-amber-600 hover:bg-amber-500 text-white'
               : 'bg-accent hover:bg-accent/90 text-white'
           }`}
         >
@@ -84,7 +100,7 @@ export default function ContextBlock({
           <span />
         )}
         {project.last_session_at && (
-          <p className="text-xs text-slate-600">
+          <p className={`text-xs ${stale ? 'text-amber-600' : 'text-slate-600'}`}>
             Обновлено {new Date(project.last_session_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
           </p>
         )}
