@@ -5,9 +5,12 @@ import { useExtractedKnowledge } from '../../hooks/useExtractedKnowledge'
 import type { ExtractedKnowledge } from '../../types'
 
 const ROUTED_COLORS: Record<string, string> = {
-  hot:       'bg-red-900/50 text-red-400',
-  knowledge: 'bg-blue-900/50 text-blue-400',
-  discard:   'bg-slate-800 text-slate-500',
+  hot:            'bg-red-900/50 text-red-400',
+  hot_backlog:    'bg-red-900/50 text-red-400',
+  knowledge:      'bg-blue-900/50 text-blue-400',
+  knowledge_base: 'bg-blue-900/50 text-blue-400',
+  discard:        'bg-slate-800 text-slate-500',
+  discarded:      'bg-slate-800 text-slate-500',
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -21,7 +24,7 @@ const TYPE_COLORS: Record<string, string> = {
 
 const SOURCE_TYPE_CFG: Record<string, { label: string; cls: string }> = {
   youtube:       { label: '▶ YouTube',    cls: 'bg-red-900/50 text-red-400' },
-  instagram:     { label: '◈ Instagram',  cls: 'bg-pink-900/50 text-pink-400' },
+  instagram:     { label: '📸 Instagram',  cls: 'bg-pink-900/50 text-pink-400' },
   link:          { label: '🔗 Link',       cls: 'bg-blue-900/50 text-blue-400' },
   text:          { label: '📄 Text',       cls: 'bg-slate-800 text-slate-400' },
   'manual-paste':{ label: '📋 Paste',      cls: 'bg-slate-800 text-slate-400' },
@@ -35,6 +38,22 @@ function sourceTypeBadge(sourceType: string | null) {
       {cfg.label}
     </span>
   )
+}
+
+function toRouteArr(rt: string | string[] | null | undefined): string[] {
+  if (!rt) return []
+  if (Array.isArray(rt)) return rt
+  try { const p = JSON.parse(rt); return Array.isArray(p) ? p : [rt] } catch { return [rt] }
+}
+
+function routedContains(rt: string | string[] | null | undefined, value: string): boolean {
+  return toRouteArr(rt).some(r => r.includes(value))
+}
+
+function scoreColor(v: number): string {
+  if (v >= 0.7) return 'text-orange-400'
+  if (v >= 0.4) return 'text-yellow-500'
+  return 'text-slate-500'
 }
 
 function scoreBar(value: number | null, color: string) {
@@ -52,7 +71,6 @@ function scoreBar(value: number | null, color: string) {
 
 function KnowledgeModal({ item, onClose }: { item: ExtractedKnowledge; onClose: () => void }) {
   const typeColor = (item.knowledge_type && TYPE_COLORS[item.knowledge_type]) ?? 'bg-slate-800 text-slate-400'
-  const routedColor = (item.routed_to && ROUTED_COLORS[item.routed_to]) ?? 'bg-slate-800 text-slate-400'
   const [rawText, setRawText] = useState<string | null>(null)
   const [rawLoading, setRawLoading] = useState(false)
 
@@ -87,11 +105,11 @@ function KnowledgeModal({ item, onClose }: { item: ExtractedKnowledge; onClose: 
                 {item.knowledge_type}
               </span>
             )}
-            {item.routed_to && (
-              <span className={`text-[11px] font-medium px-2.5 py-1 rounded-full ${routedColor}`}>
-                {item.routed_to}
+            {toRouteArr(item.routed_to).map(r => (
+              <span key={r} className={`text-[11px] font-medium px-2.5 py-1 rounded-full ${ROUTED_COLORS[r] ?? 'bg-slate-800 text-slate-400'}`}>
+                {r}
               </span>
-            )}
+            ))}
             {item.has_ready_code && (
               <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-cyan-900/50 text-cyan-400">
                 ready code
@@ -124,10 +142,6 @@ function KnowledgeModal({ item, onClose }: { item: ExtractedKnowledge; onClose: 
             <div>
               <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Novelty</p>
               {scoreBar(item.novelty, 'bg-purple-500')}
-            </div>
-            <div>
-              <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Effort</p>
-              {scoreBar(item.effort, 'bg-red-500')}
             </div>
           </div>
 
@@ -191,7 +205,6 @@ function KnowledgeModal({ item, onClose }: { item: ExtractedKnowledge; onClose: 
 
 function KnowledgeCard({ item, onOpen }: { item: ExtractedKnowledge; onOpen: (i: ExtractedKnowledge) => void }) {
   const typeColor = (item.knowledge_type && TYPE_COLORS[item.knowledge_type]) ?? 'bg-slate-800 text-slate-400'
-  const routedColor = (item.routed_to && ROUTED_COLORS[item.routed_to]) ?? 'bg-slate-800 text-slate-400'
   const dateStr = new Date(item.created_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 
   return (
@@ -220,21 +233,25 @@ function KnowledgeCard({ item, onOpen }: { item: ExtractedKnowledge; onOpen: (i:
             {item.knowledge_type}
           </span>
         )}
-        {item.routed_to && (
-          <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${routedColor}`}>
-            {item.routed_to}
+        {toRouteArr(item.routed_to).map(r => (
+          <span key={r} className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${ROUTED_COLORS[r] ?? 'bg-slate-800 text-slate-500'}`}>
+            {r}
           </span>
-        )}
+        ))}
         {item.has_ready_code && (
           <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-cyan-900/50 text-cyan-400">
             code
           </span>
         )}
-        {item.immediate_relevance != null && item.immediate_relevance >= 0.7 && (
-          <span className="text-[10px] font-medium text-amber-400">⚡{Math.round(item.immediate_relevance * 10)}</span>
+        {item.immediate_relevance != null && !isNaN(item.immediate_relevance) && (
+          <span className={`text-[10px] font-medium ${scoreColor(item.immediate_relevance)}`}>
+            ⚡{Math.round(item.immediate_relevance * 10)}
+          </span>
         )}
-        {item.strategic_relevance != null && item.strategic_relevance >= 0.7 && (
-          <span className="text-[10px] font-medium text-blue-400">🎯{Math.round(item.strategic_relevance * 10)}</span>
+        {item.strategic_relevance != null && !isNaN(item.strategic_relevance) && (
+          <span className={`text-[10px] font-medium ${scoreColor(item.strategic_relevance)}`}>
+            🎯{Math.round(item.strategic_relevance * 10)}
+          </span>
         )}
       </div>
 
@@ -396,20 +413,24 @@ export default function KnowledgePage() {
   }, [items])
 
   const stats = useMemo(() => {
-    const hot = items.filter(i => i.routed_to === 'hot').length
+    const hot = items.filter(i => routedContains(i.routed_to, 'hot_backlog')).length
     const strategic = items.filter(i => i.strategic_relevance != null && i.strategic_relevance >= 0.7).length
     return { total: items.length, hot, strategic }
   }, [items])
 
   const routeCounts = useMemo(() => {
-    const counts: Record<string, number> = { hot: 0, knowledge: 0, discard: 0 }
-    for (const i of items) if (i.routed_to && counts[i.routed_to] !== undefined) counts[i.routed_to]++
+    const counts: Record<string, number> = { hot_backlog: 0, knowledge_base: 0, discarded: 0 }
+    for (const i of items) {
+      for (const r of toRouteArr(i.routed_to)) {
+        if (counts[r] !== undefined) counts[r]++
+      }
+    }
     return counts
   }, [items])
 
   const tabCounts = useMemo(() => ({
-    hot_backlog:    items.filter(i => i.routed_to?.includes('hot_backlog')).length,
-    knowledge_base: items.filter(i => i.routed_to?.includes('knowledge_base')).length,
+    hot_backlog:    items.filter(i => routedContains(i.routed_to, 'hot_backlog')).length,
+    knowledge_base: items.filter(i => routedContains(i.routed_to, 'knowledge_base')).length,
   }), [items])
 
   const sourceCounts = useMemo(() => {
@@ -423,9 +444,9 @@ export default function KnowledgePage() {
 
   const filtered = useMemo(() => {
     let result = items.filter(i => {
-      if (tabFilter !== 'all' && !i.routed_to?.includes(tabFilter)) return false
+      if (tabFilter !== 'all' && !routedContains(i.routed_to, tabFilter)) return false
       if (typeFilter !== 'all' && i.knowledge_type !== typeFilter) return false
-      if (routeFilter !== 'all' && i.routed_to !== routeFilter) return false
+      if (routeFilter !== 'all' && !toRouteArr(i.routed_to).some(r => r.includes(routeFilter))) return false
       if (sourceFilter !== 'all' && (i.source_type ?? 'text') !== sourceFilter) return false
       if (search.trim() && !i.content.toLowerCase().includes(search.toLowerCase())) return false
       return true

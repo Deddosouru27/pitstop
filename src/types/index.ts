@@ -133,7 +133,7 @@ export interface ExtractedKnowledge {
   novelty: number | null
   effort: number | null
   has_ready_code: boolean | null
-  routed_to: string | null
+  routed_to: string | string[] | null
   tags: string[] | null
   source_url: string | null
   source_type: string | null
