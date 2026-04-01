@@ -329,6 +329,7 @@ type SortKey = 'date' | 'immediate' | 'strategic'
 export default function KnowledgePage() {
   const { items, loading, error, refresh } = useExtractedKnowledge()
   const [showPaste, setShowPaste] = useState(false)
+  const [tabFilter, setTabFilter] = useState<'all' | 'hot_backlog' | 'knowledge_base'>('all')
   const [typeFilter, setTypeFilter] = useState<string>('all')
   const [routeFilter, setRouteFilter] = useState<string>('all')
   const [sourceFilter, setSourceFilter] = useState<string>('all')
@@ -354,6 +355,11 @@ export default function KnowledgePage() {
     return counts
   }, [items])
 
+  const tabCounts = useMemo(() => ({
+    hot_backlog:    items.filter(i => i.routed_to?.includes('hot_backlog')).length,
+    knowledge_base: items.filter(i => i.routed_to?.includes('knowledge_base')).length,
+  }), [items])
+
   const sourceCounts = useMemo(() => {
     const counts: Record<string, number> = {}
     for (const i of items) {
@@ -365,6 +371,7 @@ export default function KnowledgePage() {
 
   const filtered = useMemo(() => {
     let result = items.filter(i => {
+      if (tabFilter !== 'all' && !i.routed_to?.includes(tabFilter)) return false
       if (typeFilter !== 'all' && i.knowledge_type !== typeFilter) return false
       if (routeFilter !== 'all' && i.routed_to !== routeFilter) return false
       if (sourceFilter !== 'all' && (i.source_type ?? 'text') !== sourceFilter) return false
@@ -378,7 +385,7 @@ export default function KnowledgePage() {
     }
     // default: date order preserved from fetch
     return result
-  }, [items, typeFilter, routeFilter, sourceFilter, search, sortBy])
+  }, [items, tabFilter, typeFilter, routeFilter, sourceFilter, search, sortBy])
 
   if (loading) {
     return <div className="flex items-center justify-center h-48 text-slate-500 text-sm">Loading...</div>
@@ -407,6 +414,32 @@ export default function KnowledgePage() {
           >
             📥 Вставить текст
           </button>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="px-4 pb-3">
+        <div className="flex bg-white/5 rounded-2xl p-1 border border-white/[0.06]">
+          {([
+            { key: 'all',            label: 'Все',       count: items.length },
+            { key: 'hot_backlog',    label: '🔥 Горячее', count: tabCounts.hot_backlog },
+            { key: 'knowledge_base', label: '📚 Архив',   count: tabCounts.knowledge_base },
+          ] as const).map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setTabFilter(tab.key)}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-colors ${
+                tabFilter === tab.key
+                  ? 'bg-purple-600 text-white shadow-sm'
+                  : 'text-slate-500 active:text-slate-300'
+              }`}
+            >
+              {tab.label}
+              <span className={`text-[10px] ${tabFilter === tab.key ? 'text-purple-200' : 'text-slate-600'}`}>
+                {tab.count}
+              </span>
+            </button>
+          ))}
         </div>
       </div>
 
