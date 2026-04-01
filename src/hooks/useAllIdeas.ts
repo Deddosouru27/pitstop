@@ -45,6 +45,11 @@ export function useAllIdeas() {
     }
   }, [update])
 
+  const updateStatus = useCallback(async (ids: string[], status: 'accepted' | 'dismissed' | 'deferred' | 'pending'): Promise<void> => {
+    update(prev => prev.map(i => ids.includes(i.id) ? { ...i, status } : i))
+    await supabase.from('ideas').update({ status }).in('id', ids)
+  }, [update])
+
   useSupabaseRealtime<Idea>({ table: 'ideas', channelName: 'realtime-all-ideas' }, {
     onInsert: (record) => update(prev => {
       if (prev.some(i => i.id === record.id)) return prev
@@ -54,5 +59,5 @@ export function useAllIdeas() {
     onDelete: (old) => { if (old.id) update(prev => prev.filter(i => i.id !== old.id)) },
   })
 
-  return { ideas, loading, markConverted, deleteIdea }
+  return { ideas, loading, markConverted, deleteIdea, updateStatus }
 }
