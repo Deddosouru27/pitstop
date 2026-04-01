@@ -245,12 +245,12 @@ function KnowledgeCard({ item, onOpen }: { item: ExtractedKnowledge; onOpen: (i:
         )}
         {item.immediate_relevance != null && !isNaN(item.immediate_relevance) && (
           <span className={`text-[10px] font-medium ${scoreColor(item.immediate_relevance)}`}>
-            ⚡{Math.round(item.immediate_relevance * 10)}
+            ⚡{item.immediate_relevance.toFixed(2)}
           </span>
         )}
         {item.strategic_relevance != null && !isNaN(item.strategic_relevance) && (
           <span className={`text-[10px] font-medium ${scoreColor(item.strategic_relevance)}`}>
-            🎯{Math.round(item.strategic_relevance * 10)}
+            🎯{item.strategic_relevance.toFixed(2)}
           </span>
         )}
       </div>
@@ -430,7 +430,7 @@ export default function KnowledgePage() {
 
   const tabCounts = useMemo(() => ({
     hot_backlog:    items.filter(i => routedContains(i.routed_to, 'hot_backlog')).length,
-    knowledge_base: items.filter(i => routedContains(i.routed_to, 'knowledge_base')).length,
+    knowledge_base: items.filter(i => routedContains(i.routed_to, 'knowledge_base') && !routedContains(i.routed_to, 'hot_backlog')).length,
   }), [items])
 
   const sourceCounts = useMemo(() => {
@@ -444,7 +444,8 @@ export default function KnowledgePage() {
 
   const filtered = useMemo(() => {
     let result = items.filter(i => {
-      if (tabFilter !== 'all' && !routedContains(i.routed_to, tabFilter)) return false
+      if (tabFilter === 'hot_backlog' && !routedContains(i.routed_to, 'hot_backlog')) return false
+      if (tabFilter === 'knowledge_base' && !(routedContains(i.routed_to, 'knowledge_base') && !routedContains(i.routed_to, 'hot_backlog'))) return false
       if (typeFilter !== 'all' && i.knowledge_type !== typeFilter) return false
       if (routeFilter !== 'all' && !toRouteArr(i.routed_to).some(r => r.includes(routeFilter))) return false
       if (sourceFilter !== 'all' && (i.source_type ?? 'text') !== sourceFilter) return false
