@@ -26,10 +26,12 @@ const TYPE_COLORS: Record<string, string> = {
 
 const SOURCE_TYPE_CFG: Record<string, { label: string; cls: string }> = {
   youtube:       { label: '▶ YouTube',    cls: 'bg-red-900/50 text-red-400' },
-  instagram:     { label: '📸 Instagram',  cls: 'bg-pink-900/50 text-pink-400' },
-  link:          { label: '🔗 Link',       cls: 'bg-blue-900/50 text-blue-400' },
-  text:          { label: '📄 Text',       cls: 'bg-slate-800 text-slate-400' },
+  instagram:     { label: '📸 Instagram',  cls: 'bg-gradient-to-r from-pink-900/60 to-purple-900/60 text-pink-300' },
+  link:          { label: '📰 Article',    cls: 'bg-slate-700/60 text-slate-300' },
+  article:       { label: '📰 Article',    cls: 'bg-slate-700/60 text-slate-300' },
+  text:          { label: '📝 Text',       cls: 'bg-slate-800 text-slate-400' },
   'manual-paste':{ label: '📋 Paste',      cls: 'bg-slate-800 text-slate-400' },
+  telegram:      { label: '✈ Telegram',   cls: 'bg-blue-900/50 text-blue-400' },
 }
 
 function sourceTypeBadge(sourceType: string | null) {
@@ -50,12 +52,6 @@ function toRouteArr(rt: string | string[] | null | undefined): string[] {
 
 function routedContains(rt: string | string[] | null | undefined, value: string): boolean {
   return toRouteArr(rt).some(r => r.includes(value))
-}
-
-function scoreColor(v: number): string {
-  if (v >= 0.7) return 'text-orange-400'
-  if (v >= 0.4) return 'text-yellow-500'
-  return 'text-slate-500'
 }
 
 function scoreBar(value: number | null, color: string) {
@@ -249,13 +245,15 @@ function KnowledgeModal({ item, onClose, onOpenItem }: {
 
           {/* Similar knowledge */}
           <div>
-            <button
-              onClick={loadSimilar}
-              disabled={similarLoading || similar !== null}
-              className="flex items-center gap-2 text-xs text-slate-400 bg-white/5 active:bg-white/10 disabled:opacity-40 px-3 py-2 rounded-xl transition-colors w-fit"
-            >
-              🔗 {similarLoading ? 'Поиск...' : similar !== null ? 'Похожие загружены' : 'Похожие знания'}
-            </button>
+            {similar === null && (
+              <button
+                onClick={loadSimilar}
+                disabled={similarLoading}
+                className="flex items-center gap-2 text-xs text-slate-400 bg-white/5 active:bg-white/10 disabled:opacity-40 px-3 py-2 rounded-xl transition-colors w-fit"
+              >
+                🔗 {similarLoading ? 'Поиск...' : '🔗 Связанные'}
+              </button>
+            )}
             {similar !== null && similar.length === 0 && !similarError && (
               <p className="text-xs text-slate-600 mt-2 italic">Похожих не найдено</p>
             )}
@@ -285,13 +283,15 @@ function KnowledgeModal({ item, onClose, onOpenItem }: {
 
           {/* Memory history */}
           <div>
-            <button
-              onClick={loadHistory}
-              disabled={historyLoading || history !== null}
-              className="flex items-center gap-2 text-xs text-slate-400 bg-white/5 active:bg-white/10 disabled:opacity-40 px-3 py-2 rounded-xl transition-colors w-fit"
-            >
-              📜 {historyLoading ? 'Загрузка...' : history !== null ? `История: ${history.length} изменений` : 'История записи'}
-            </button>
+            {history === null && (
+              <button
+                onClick={loadHistory}
+                disabled={historyLoading}
+                className="flex items-center gap-2 text-xs text-slate-400 bg-white/5 active:bg-white/10 disabled:opacity-40 px-3 py-2 rounded-xl transition-colors w-fit"
+              >
+                {historyLoading ? 'Загрузка...' : '📜 История'}
+              </button>
+            )}
             {history !== null && history.length === 0 && (
               <p className="text-xs text-slate-600 mt-2 italic">Изменений не найдено</p>
             )}
@@ -336,14 +336,16 @@ function KnowledgeModal({ item, onClose, onOpenItem }: {
             )}
           </div>
 
-          <button
-            onClick={loadRaw}
-            disabled={!item.ingested_content_id || rawLoading || rawText !== null}
-            className="flex items-center gap-2 text-xs text-slate-400 bg-white/5 active:bg-white/10 disabled:opacity-40 px-3 py-2 rounded-xl transition-colors w-fit"
-          >
-            <FileText size={13} />
-            {rawLoading ? 'Загрузка...' : rawText !== null ? 'Текст загружен' : 'Показать исходный текст'}
-          </button>
+          {item.ingested_content_id && rawText === null && (
+            <button
+              onClick={loadRaw}
+              disabled={rawLoading}
+              className="flex items-center gap-2 text-xs text-slate-400 bg-white/5 active:bg-white/10 disabled:opacity-40 px-3 py-2 rounded-xl transition-colors w-fit"
+            >
+              <FileText size={13} />
+              {rawLoading ? 'Загрузка...' : '📄 Исходник'}
+            </button>
+          )}
 
           {rawText !== null && (
             <div>
@@ -411,19 +413,6 @@ function KnowledgeCard({ item, onOpen }: { item: ExtractedKnowledge; onOpen: (i:
             code
           </span>
         )}
-        {item.immediate_relevance != null && !isNaN(item.immediate_relevance) && (
-          <span className={`text-[10px] font-medium ${scoreColor(item.immediate_relevance)}`}>
-            ⚡{item.immediate_relevance.toFixed(2)}
-          </span>
-        )}
-        {item.strategic_relevance != null && !isNaN(item.strategic_relevance) && (
-          <span className={`text-[10px] font-medium ${scoreColor(item.strategic_relevance)}`}>
-            🎯{item.strategic_relevance.toFixed(2)}
-          </span>
-        )}
-        <span className="text-[10px] ml-auto" title={item.has_embedding ? 'Embedding готов' : 'Без embedding'}>
-          {item.has_embedding ? '🧠' : '⚪'}
-        </span>
       </div>
 
       {/* source_url on card */}
@@ -574,16 +563,6 @@ function GuidesTab() {
   )
 }
 
-const SOURCE_ICON: Record<string, string> = {
-  instagram:      '📸',
-  youtube:        '🎬',
-  link:           '📰',
-  article:        '📰',
-  telegram:       '✈',
-  text:           '📝',
-  'manual-paste': '📝',
-}
-
 function SourceGroupBlock({
   sourceUrl,
   sourceType,
@@ -600,7 +579,6 @@ function SourceGroupBlock({
   const [expanded, setExpanded] = useState(false)
   const [meta, setMeta] = useState<{ title: string | null; summary: string | null } | null>(null)
 
-  // Lazy-fetch ingested_content title+summary once on first render
   useState(() => {
     if (!ingestedContentId) return
     supabase
@@ -613,32 +591,70 @@ function SourceGroupBlock({
       })
   })
 
-  const icon = SOURCE_ICON[sourceType ?? ''] ?? '📦'
-  const name = meta?.title ?? sourceLabel(sourceUrl)
-  const topic = meta?.summary ? meta.summary.slice(0, 50) + (meta.summary.length > 50 ? '…' : '') : null
+  const srcCfg = SOURCE_TYPE_CFG[sourceType ?? ''] ?? { label: '📦 Unknown', cls: 'bg-slate-800 text-slate-400' }
+
+  // Parse creator handle from title (e.g. "Instagram @artemiy.miller ...")
+  const rawTitle = meta?.title ?? ''
+  const creatorMatch = rawTitle.match(/@[\w.]+/)
+  const creator = creatorMatch?.[0] ?? null
+
+  // Topic = summary first ~60 chars, stripped of technical suffixes like "(audio+caption)"
+  const rawSummary = meta?.summary ?? ''
+  const cleanSummary = rawSummary.replace(/\s*\([^)]*\)\s*/g, ' ').trim()
+  const topic = cleanSummary ? cleanSummary.slice(0, 60) + (cleanSummary.length > 60 ? '…' : '') : null
+
+  // Fallback topic from sourceLabel
+  const fallbackName = sourceLabel(sourceUrl)
+
+  // Latest item date
+  const latestDate = items.reduce((max, i) =>
+    i.created_at > max ? i.created_at : max, items[0].created_at)
+  const dateStr = new Date(latestDate).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 
   return (
     <div className="border border-white/[0.06] rounded-2xl overflow-hidden">
       <button
         onClick={() => setExpanded(v => !v)}
-        className="w-full flex items-center gap-2 px-4 py-3 bg-white/[0.03] active:bg-white/[0.07] text-left transition-colors"
+        className="w-full px-4 py-3 bg-white/[0.03] active:bg-white/[0.07] text-left transition-colors"
       >
-        <span className="text-base shrink-0">{icon}</span>
-        <div className="flex-1 min-w-0">
-          <p className="text-xs text-slate-200 font-medium truncate">
-            {name}
-            {topic && <span className="text-slate-500 font-normal"> — {topic}</span>}
-          </p>
+        {/* Row 1: source tag + count + date */}
+        <div className="flex items-center gap-2 mb-1">
+          <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${srcCfg.cls}`}>
+            {srcCfg.label}
+          </span>
+          <span className="flex-1" />
+          <span className="text-[10px] font-semibold text-slate-500">({items.length})</span>
+          <span className="text-[10px] text-slate-600 whitespace-nowrap">{dateStr}</span>
+          <ChevronDown size={12} className={`text-slate-600 transition-transform ${expanded ? 'rotate-180' : ''}`} />
         </div>
-        <span className="shrink-0 text-[11px] font-semibold text-slate-500 ml-1">({items.length})</span>
-        <ChevronDown
-          size={13}
-          className={`shrink-0 text-slate-600 transition-transform ${expanded ? 'rotate-180' : ''}`}
-        />
+        {/* Row 2: topic as main text */}
+        <p className="text-sm text-slate-200 font-medium leading-snug line-clamp-2">
+          {topic || fallbackName}
+        </p>
       </button>
       {expanded && (
-        <div className="p-2 space-y-2">
-          {items.map(i => <KnowledgeCard key={i.id} item={i} onOpen={onOpen} />)}
+        <div className="border-t border-white/[0.04]">
+          {/* Creator + link shown inside */}
+          {(creator || sourceUrl) && (
+            <div className="flex items-center gap-2 px-4 py-2 border-b border-white/[0.04]">
+              {creator && <span className="text-xs text-slate-500">{creator}</span>}
+              {sourceUrl && (
+                <a
+                  href={sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-[10px] text-blue-400 active:text-blue-300 ml-auto"
+                  onClick={e => e.stopPropagation()}
+                >
+                  <ExternalLink size={10} />
+                  <span className="truncate max-w-[180px]">{sourceUrl}</span>
+                </a>
+              )}
+            </div>
+          )}
+          <div className="p-2 space-y-2">
+            {items.map(i => <KnowledgeCard key={i.id} item={i} onOpen={onOpen} />)}
+          </div>
         </div>
       )}
     </div>
@@ -863,15 +879,11 @@ export default function KnowledgePage() {
     return { total: items.length, hot, strategic }
   }, [items])
 
-  const routeCounts = useMemo(() => {
-    const counts: Record<string, number> = { hot_backlog: 0, knowledge_base: 0, discarded: 0 }
-    for (const i of items) {
-      for (const r of toRouteArr(i.routed_to)) {
-        if (counts[r] !== undefined) counts[r]++
-      }
-    }
-    return counts
-  }, [items])
+  const routeCounts = useMemo(() => ({
+    hot:      items.filter(i => routedContains(i.routed_to, 'hot_backlog')).length,
+    archive:  items.filter(i => routedContains(i.routed_to, 'knowledge_base') && !routedContains(i.routed_to, 'hot_backlog')).length,
+    discard:  items.filter(i => routedContains(i.routed_to, 'discarded')).length,
+  }), [items])
 
   const tabCounts = useMemo(() => ({
     hot_backlog:    items.filter(i => routedContains(i.routed_to, 'hot_backlog')).length,
@@ -892,7 +904,9 @@ export default function KnowledgePage() {
       if (tabFilter === 'hot_backlog' && !routedContains(i.routed_to, 'hot_backlog')) return false
       if (tabFilter === 'knowledge_base' && !(routedContains(i.routed_to, 'knowledge_base') && !routedContains(i.routed_to, 'hot_backlog'))) return false
       if (typeFilter !== 'all' && i.knowledge_type !== typeFilter) return false
-      if (routeFilter !== 'all' && !toRouteArr(i.routed_to).some(r => r.includes(routeFilter))) return false
+      if (routeFilter === 'hot' && !routedContains(i.routed_to, 'hot_backlog')) return false
+      if (routeFilter === 'archive' && !(routedContains(i.routed_to, 'knowledge_base') && !routedContains(i.routed_to, 'hot_backlog'))) return false
+      if (routeFilter === 'discard' && !routedContains(i.routed_to, 'discarded')) return false
       if (sourceFilter !== 'all' && (i.source_type ?? 'text') !== sourceFilter) return false
       if (search.trim() && !i.content.toLowerCase().includes(search.toLowerCase())) return false
       return true
@@ -1078,23 +1092,20 @@ export default function KnowledgePage() {
 
       {/* Route filter chips with counts */}
       <div className="px-4 pb-2 flex gap-2 overflow-x-auto scrollbar-hide">
-        <button
-          onClick={() => setRouteFilter('all')}
-          className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
-            routeFilter === 'all' ? 'bg-purple-600 text-white' : 'bg-white/5 text-slate-400 active:bg-white/10'
-          }`}
-        >
-          Все
-        </button>
-        {(['hot', 'knowledge', 'discard'] as const).map(r => (
+        {([
+          { key: 'all',     label: 'Все',        count: filtered.length },
+          { key: 'hot',     label: '🔥 Горячее', count: routeCounts.hot },
+          { key: 'archive', label: '📚 Архив',   count: routeCounts.archive },
+          { key: 'discard', label: '🗑 Мусор',   count: routeCounts.discard },
+        ] as const).map(({ key, label, count }) => (
           <button
-            key={r}
-            onClick={() => setRouteFilter(r)}
+            key={key}
+            onClick={() => setRouteFilter(key)}
             className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
-              routeFilter === r ? 'bg-purple-600 text-white' : 'bg-white/5 text-slate-400 active:bg-white/10'
+              routeFilter === key ? 'bg-purple-600 text-white' : 'bg-white/5 text-slate-400 active:bg-white/10'
             }`}
           >
-            {r} ({routeCounts[r]})
+            {label} ({count})
           </button>
         ))}
       </div>
