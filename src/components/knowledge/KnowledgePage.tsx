@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { BookOpen, X, ExternalLink, Search, FileText, ChevronDown } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { supabaseMemory } from '../../lib/supabaseMemory'
@@ -67,21 +67,6 @@ function scoreBar(value: number | null, color: string) {
   )
 }
 
-function sourceLabel(url: string): string {
-  try {
-    const u = new URL(url)
-    const host = u.hostname.replace(/^www\./, '')
-    if (host.includes('instagram.com')) {
-      const m = u.pathname.match(/\/([^/?#]+)/)
-      return m ? `Instagram @${m[1]}` : 'Instagram'
-    }
-    if (host.includes('youtube.com') || host === 'youtu.be') return 'YouTube'
-    if (host.includes('t.me') || host.includes('telegram')) return 'Telegram'
-    return host
-  } catch {
-    return url.length > 30 ? url.slice(0, 30) + '…' : url
-  }
-}
 
 type SimilarItem = { id: string; content: string; similarity: number; knowledge_type: string | null }
 
@@ -563,52 +548,44 @@ function GuidesTab() {
   )
 }
 
+interface SourceInfo {
+  title: string | null
+  summary: string | null
+  source_type: string | null
+  source_url: string | null
+}
+
 function SourceGroupBlock({
-  sourceUrl,
-  sourceType,
-  ingestedContentId,
+  sourceInfo,
+  fallbackSourceType,
   items,
   onOpen,
 }: {
-  sourceUrl: string
-  sourceType: string | null
-  ingestedContentId: string | null | undefined
+  sourceInfo: SourceInfo | null
+  fallbackSourceType: string | null
   items: ExtractedKnowledge[]
   onOpen: (i: ExtractedKnowledge) => void
 }) {
   const [expanded, setExpanded] = useState(false)
-  const [meta, setMeta] = useState<{ title: string | null; summary: string | null } | null>(null)
 
-  useState(() => {
-    if (!ingestedContentId) return
-    supabase
-      .from('ingested_content')
-      .select('title,summary')
-      .eq('id', ingestedContentId)
-      .single()
-      .then(({ data }) => {
-        if (data) setMeta({ title: data.title ?? null, summary: data.summary ?? null })
-      })
-  })
-
+  const sourceType = sourceInfo?.source_type ?? fallbackSourceType
   const srcCfg = SOURCE_TYPE_CFG[sourceType ?? ''] ?? { label: '📦 Unknown', cls: 'bg-slate-800 text-slate-400' }
 
-  // Parse creator handle from title (e.g. "Instagram @artemiy.miller ...")
-  const rawTitle = meta?.title ?? ''
-  const creatorMatch = rawTitle.match(/@[\w.]+/)
-  const creator = creatorMatch?.[0] ?? null
-
-  // Topic = summary first ~60 chars, stripped of technical suffixes like "(audio+caption)"
-  const rawSummary = meta?.summary ?? ''
+  // Topic: summary stripped of technical noise, else title, else fallback
+  const rawSummary = sourceInfo?.summary ?? ''
   const cleanSummary = rawSummary.replace(/\s*\([^)]*\)\s*/g, ' ').trim()
-  const topic = cleanSummary ? cleanSummary.slice(0, 60) + (cleanSummary.length > 60 ? '…' : '') : null
+  const rawTitle = sourceInfo?.title ?? ''
+  // Strip "(audio+caption)" etc from title too
+  const cleanTitle = rawTitle.replace(/\s*\([^)]*\)\s*/g, ' ').trim()
+  const topic = (cleanSummary || cleanTitle || 'Знания без заголовка').slice(0, 70)
 
-  // Fallback topic from sourceLabel
-  const fallbackName = sourceLabel(sourceUrl)
+  // Creator = @handle extracted from title only if it looks like a handle, not a URL
+  const creatorMatch = rawTitle.match(/@([\w.]+)/)
+  const creator = creatorMatch ? `@${creatorMatch[1]}` : null
+  const sourceUrl = sourceInfo?.source_url ?? null
 
   // Latest item date
-  const latestDate = items.reduce((max, i) =>
-    i.created_at > max ? i.created_at : max, items[0].created_at)
+  const latestDate = items.reduce((max, i) => i.created_at > max ? i.created_at : max, items[0].created_at)
   const dateStr = new Date(latestDate).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 
   return (
@@ -618,23 +595,20 @@ function SourceGroupBlock({
         className="w-full px-4 py-3 bg-white/[0.03] active:bg-white/[0.07] text-left transition-colors"
       >
         {/* Row 1: source tag + count + date */}
-        <div className="flex items-center gap-2 mb-1">
+        <div className="flex items-center gap-2 mb-1.5">
           <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${srcCfg.cls}`}>
             {srcCfg.label}
           </span>
           <span className="flex-1" />
           <span className="text-[10px] font-semibold text-slate-500">({items.length})</span>
           <span className="text-[10px] text-slate-600 whitespace-nowrap">{dateStr}</span>
-          <ChevronDown size={12} className={`text-slate-600 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+          <ChevronDown size={12} className={`text-slate-600 transition-transform shrink-0 ${expanded ? 'rotate-180' : ''}`} />
         </div>
-        {/* Row 2: topic as main text */}
-        <p className="text-sm text-slate-200 font-medium leading-snug line-clamp-2">
-          {topic || fallbackName}
-        </p>
+        {/* Row 2: topic as main bright text */}
+        <p className="text-sm text-slate-100 font-medium leading-snug line-clamp-2">{topic}</p>
       </button>
       {expanded && (
         <div className="border-t border-white/[0.04]">
-          {/* Creator + link shown inside */}
           {(creator || sourceUrl) && (
             <div className="flex items-center gap-2 px-4 py-2 border-b border-white/[0.04]">
               {creator && <span className="text-xs text-slate-500">{creator}</span>}
@@ -866,6 +840,7 @@ export default function KnowledgePage() {
   const [sortBy, setSortBy] = useState<SortKey>('date')
   const [selected, setSelected] = useState<ExtractedKnowledge | null>(null)
   const [groupMode, setGroupMode] = useState(false)
+  const [sourceMap, setSourceMap] = useState<Map<string, SourceInfo>>(new Map())
 
   const types = useMemo(() => {
     const s = new Set<string>()
@@ -919,23 +894,76 @@ export default function KnowledgePage() {
     return result
   }, [items, tabFilter, typeFilter, routeFilter, sourceFilter, search, sortBy])
 
-  // Group by source_url — preserves order of first occurrence
-  const groupedFiltered = useMemo(() => {
-    const urlGroups = new Map<string, ExtractedKnowledge[]>()
-    const order: string[] = []
+  useEffect(() => {
+    if (!groupMode) return
+    const ids = [...new Set(
+      filtered.map(i => i.ingested_content_id).filter((id): id is string => !!id)
+    )]
+    if (ids.length === 0) return
+    let cancelled = false
+    supabase
+      .from('ingested_content')
+      .select('id, title, summary, source_type, source_url')
+      .in('id', ids)
+      .then(({ data }) => {
+        if (cancelled || !data) return
+        const map = new Map<string, SourceInfo>()
+        for (const row of data) {
+          map.set(row.id, {
+            title: (row as { title: string | null }).title ?? null,
+            summary: (row as { summary: string | null }).summary ?? null,
+            source_type: (row as { source_type: string | null }).source_type ?? null,
+            source_url: (row as { source_url: string | null }).source_url ?? null,
+          })
+        }
+        setSourceMap(map)
+      })
+    return () => { cancelled = true }
+  }, [groupMode, filtered])
+
+  type GroupEntry =
+    | { kind: 'group'; ingestedId: string; fallbackSourceType: string | null; items: ExtractedKnowledge[] }
+    | { kind: 'minute-group'; minuteKey: string; fallbackSourceType: string | null; items: ExtractedKnowledge[] }
+    | { kind: 'singleton'; item: ExtractedKnowledge }
+
+  // Group by ingested_content_id (3-tier)
+  const groupedFiltered = useMemo((): GroupEntry[] => {
+    const byId = new Map<string, ExtractedKnowledge[]>()
+    const byIdOrder: string[] = []
+    const byMinute = new Map<string, ExtractedKnowledge[]>()
+    const byMinuteOrder: string[] = []
+
     for (const item of filtered) {
-      const key = item.source_url ?? `__solo_${item.id}`
-      if (!urlGroups.has(key)) {
-        urlGroups.set(key, [])
-        order.push(key)
+      if (item.ingested_content_id) {
+        if (!byId.has(item.ingested_content_id)) {
+          byId.set(item.ingested_content_id, [])
+          byIdOrder.push(item.ingested_content_id)
+        }
+        byId.get(item.ingested_content_id)!.push(item)
+      } else {
+        const minuteKey = item.created_at.slice(0, 16) // "YYYY-MM-DDTHH:MM"
+        if (!byMinute.has(minuteKey)) {
+          byMinute.set(minuteKey, [])
+          byMinuteOrder.push(minuteKey)
+        }
+        byMinute.get(minuteKey)!.push(item)
       }
-      urlGroups.get(key)!.push(item)
     }
-    return order.map(key => ({
-      key,
-      source_url: key.startsWith('__solo_') ? null : key,
-      items: urlGroups.get(key)!,
-    }))
+
+    const result: GroupEntry[] = []
+    for (const id of byIdOrder) {
+      const items = byId.get(id)!
+      result.push({ kind: 'group', ingestedId: id, fallbackSourceType: items[0].source_type ?? null, items })
+    }
+    for (const minuteKey of byMinuteOrder) {
+      const items = byMinute.get(minuteKey)!
+      if (items.length === 1) {
+        result.push({ kind: 'singleton', item: items[0] })
+      } else {
+        result.push({ kind: 'minute-group', minuteKey, fallbackSourceType: items[0].source_type ?? null, items })
+      }
+    }
+    return result
   }, [filtered])
 
   if (loading) {
@@ -1188,18 +1216,28 @@ export default function KnowledgePage() {
         ) : !groupMode ? (
           filtered.map(i => <KnowledgeCard key={i.id} item={i} onOpen={setSelected} />)
         ) : (
-          groupedFiltered.map(group => {
-            if (!group.source_url || group.items.length === 1) {
-              return group.items.map(i => <KnowledgeCard key={i.id} item={i} onOpen={setSelected} />)
+          groupedFiltered.map(entry => {
+            if (entry.kind === 'singleton') {
+              return <KnowledgeCard key={entry.item.id} item={entry.item} onOpen={setSelected} />
             }
-            const first = group.items[0]
+            if (entry.kind === 'group') {
+              return (
+                <SourceGroupBlock
+                  key={entry.ingestedId}
+                  sourceInfo={sourceMap.get(entry.ingestedId) ?? null}
+                  fallbackSourceType={entry.fallbackSourceType}
+                  items={entry.items}
+                  onOpen={setSelected}
+                />
+              )
+            }
+            // minute-group: orphan items (no ingested_content_id) batched by minute
             return (
               <SourceGroupBlock
-                key={group.key}
-                sourceUrl={group.source_url}
-                sourceType={first.source_type}
-                ingestedContentId={first.ingested_content_id}
-                items={group.items}
+                key={entry.minuteKey}
+                sourceInfo={null}
+                fallbackSourceType={entry.fallbackSourceType}
+                items={entry.items}
                 onOpen={setSelected}
               />
             )
