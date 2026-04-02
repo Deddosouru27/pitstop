@@ -3,7 +3,8 @@ import { BookOpen, X, ExternalLink, Search, FileText, ChevronDown } from 'lucide
 import { supabase } from '../../lib/supabase'
 import { supabaseMemory } from '../../lib/supabaseMemory'
 import { useExtractedKnowledge } from '../../hooks/useExtractedKnowledge'
-import type { ExtractedKnowledge, MemoryHistory } from '../../types'
+import { useGuides } from '../../hooks/useGuides'
+import type { ExtractedKnowledge, MemoryHistory, IngestedContent } from '../../types'
 
 const ROUTED_COLORS: Record<string, string> = {
   hot:            'bg-red-900/50 text-red-400',
@@ -456,6 +457,123 @@ function KnowledgeCard({ item, onOpen }: { item: ExtractedKnowledge; onOpen: (i:
   )
 }
 
+// ── Guide card ────────────────────────────────────────────────────────────────
+
+function GuideCard({ guide }: { guide: IngestedContent }) {
+  const [expanded, setExpanded] = useState(false)
+  const [showRaw, setShowRaw] = useState(false)
+
+  return (
+    <div className="bg-white/5 rounded-2xl border border-white/[0.06] overflow-hidden">
+      <button
+        onClick={() => setExpanded(v => !v)}
+        className="w-full text-left p-4 space-y-2 active:opacity-70 transition-opacity"
+      >
+        <div className="flex items-start gap-2">
+          <p className="flex-1 text-slate-100 text-sm font-semibold leading-snug">
+            {guide.title ?? guide.source_url ?? 'Гайд'}
+          </p>
+          <span className="shrink-0 text-[10px] text-slate-600 mt-0.5 whitespace-nowrap">
+            {new Date(guide.created_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short' })}
+          </span>
+        </div>
+
+        {guide.summary && (
+          <p className={`text-slate-400 text-xs leading-relaxed ${expanded ? '' : 'line-clamp-3'}`}>
+            {guide.summary}
+          </p>
+        )}
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-900/40 text-emerald-400">
+            📖 Гайд
+          </span>
+          {guide.knowledge_count != null && guide.knowledge_count > 0 && (
+            <span className="text-[10px] text-slate-500">
+              {guide.knowledge_count} инсайт{guide.knowledge_count === 1 ? '' : guide.knowledge_count < 5 ? 'а' : 'ов'}
+            </span>
+          )}
+          <ChevronDown
+            size={12}
+            className={`ml-auto text-slate-600 transition-transform ${expanded ? 'rotate-180' : ''}`}
+          />
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-white/[0.04] px-4 pb-4 pt-3 space-y-3">
+          {guide.source_url && (
+            <a
+              href={guide.source_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-xs text-blue-400 active:text-blue-300"
+              onClick={e => e.stopPropagation()}
+            >
+              <ExternalLink size={12} />
+              <span className="truncate">{guide.source_url}</span>
+            </a>
+          )}
+
+          <button
+            onClick={() => setShowRaw(v => !v)}
+            disabled={!guide.raw_text}
+            className="flex items-center gap-2 text-xs text-slate-400 bg-white/5 active:bg-white/10 disabled:opacity-40 px-3 py-2 rounded-xl transition-colors"
+          >
+            <FileText size={13} />
+            {showRaw ? 'Скрыть текст' : 'Читать полностью'}
+            {guide.raw_text && (
+              <span className="text-slate-600 ml-1">· {guide.raw_text.length} chars</span>
+            )}
+          </button>
+
+          {showRaw && guide.raw_text && (
+            <textarea
+              readOnly
+              value={guide.raw_text}
+              style={{ minHeight: '240px', maxHeight: '500px' }}
+              className="w-full bg-white/5 border border-white/[0.06] rounded-xl px-3 py-2.5 text-xs text-slate-400 resize-none outline-none font-mono leading-relaxed"
+            />
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function GuidesTab() {
+  const { guides, loading, error } = useGuides()
+
+  if (loading) {
+    return <div className="flex items-center justify-center py-16 text-slate-500 text-sm">Loading...</div>
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center py-16 text-center space-y-1">
+        <p className="text-sm text-slate-500">Не удалось загрузить гайды</p>
+        <p className="text-xs text-slate-600">{error}</p>
+      </div>
+    )
+  }
+
+  if (guides.length === 0) {
+    return (
+      <div className="flex flex-col items-center py-16 text-center space-y-1">
+        <p className="text-3xl">📖</p>
+        <p className="text-sm text-slate-500">Гайдов пока нет</p>
+        <p className="text-xs text-slate-600">Контент с is_guide = true появится здесь</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      {guides.map(g => <GuideCard key={g.id} guide={g} />)}
+    </div>
+  )
+}
+
 function SourceGroupBlock({
   sourceUrl,
   items,
@@ -684,9 +802,11 @@ function PasteModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: ()
 }
 
 type SortKey = 'date' | 'immediate' | 'strategic'
+type PageTab = 'knowledge' | 'guides'
 
 export default function KnowledgePage() {
   const { items, loading, error, refresh } = useExtractedKnowledge()
+  const [pageTab, setPageTab] = useState<PageTab>('knowledge')
   const [showPaste, setShowPaste] = useState(false)
   const [tabFilter, setTabFilter] = useState<'all' | 'hot_backlog' | 'knowledge_base'>('all')
   const [typeFilter, setTypeFilter] = useState<string>('all')
@@ -799,6 +919,37 @@ export default function KnowledgePage() {
         </div>
       </div>
 
+      {/* Page tab switcher */}
+      <div className="px-4 pb-3">
+        <div className="flex bg-white/5 rounded-2xl p-1 border border-white/[0.06]">
+          {([
+            { key: 'knowledge', label: '🧠 База знаний' },
+            { key: 'guides',    label: '📖 Гайды' },
+          ] as const).map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setPageTab(tab.key)}
+              className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-colors ${
+                pageTab === tab.key
+                  ? 'bg-purple-600 text-white'
+                  : 'text-slate-500 active:text-slate-300'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Guides tab */}
+      {pageTab === 'guides' && (
+        <div className="px-4 flex-1">
+          <GuidesTab />
+        </div>
+      )}
+
+      {pageTab !== 'guides' && (
+      <>
       {/* Tabs */}
       <div className="px-4 pb-3">
         <div className="flex bg-white/5 rounded-2xl p-1 border border-white/[0.06]">
@@ -990,6 +1141,8 @@ export default function KnowledgePage() {
             if (found) setSelected(found)
           }}
         />
+      )}
+      </>
       )}
 
       {showPaste && (

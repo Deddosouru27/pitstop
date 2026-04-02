@@ -163,8 +163,9 @@ export interface IngestedContent {
   processing_status: string | null
   raw_text: string | null
   summary: string | null
-  routing_result: Record<string, unknown> | null
+  routing_result?: Record<string, unknown> | null
   knowledge_count: number | null
+  is_guide?: boolean | null
   created_at: string
 }
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { BarChart2, ChevronDown, X } from 'lucide-react'
+import { supabase } from '../../lib/supabase'
 import { useAgentStats } from '../../hooks/useAgentStats'
 import { useCyclePlan } from '../../hooks/useCyclePlan'
 import { useKnowledgeStats } from '../../hooks/useKnowledgeStats'
@@ -186,6 +187,20 @@ function PhaseTaskList({ tasks, onOpen }: { tasks: Task[]; onOpen: (t: Task) => 
   )
 }
 
+// Trigger config for phases that have a numeric progress target
+const PHASE_TRIGGER: Record<number, { label: string; target: number; fetch: () => Promise<number> }> = {
+  3: {
+    label: 'знаний',
+    target: 300,
+    fetch: async () => {
+      const { count } = await supabase
+        .from('extracted_knowledge')
+        .select('*', { count: 'exact', head: true })
+      return count ?? 0
+    },
+  },
+}
+
 function CycleWidget() {
   const { plan, tasksByPhase, loading } = useCyclePlan()
   const phases = plan?.phases ?? []
@@ -193,6 +208,7 @@ function CycleWidget() {
   const [expanded, setExpanded] = useState<number | null>(null)
   const [initialised, setInitialised] = useState(false)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
+  const [triggerCounts, setTriggerCounts] = useState<Record<number, number>>({})
 
   // Set default expansion once when plan first loads
   useEffect(() => {
@@ -201,6 +217,21 @@ function CycleWidget() {
       setInitialised(true)
     }
   }, [initialised, activePhaseNum])
+
+  // Fetch trigger counts for active phases that have a trigger
+  useEffect(() => {
+    if (!phases.length) return
+    const activeTriggerPhases = phases.filter(p => p.status === 'active' && PHASE_TRIGGER[p.number])
+    if (!activeTriggerPhases.length) return
+    Promise.all(
+      activeTriggerPhases.map(async p => {
+        const count = await PHASE_TRIGGER[p.number].fetch()
+        return [p.number, count] as [number, number]
+      })
+    ).then(results => {
+      setTriggerCounts(Object.fromEntries(results))
+    })
+  }, [phases.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return null
 
@@ -274,9 +305,30 @@ function CycleWidget() {
 
               {/* Tasks — expanded */}
               {isOpen && (
-                <div className="px-3 pb-3">
+                <div className="px-3 pb-3 space-y-2">
                   {isActive && phase.description && (
-                    <p className="text-xs text-slate-500 mb-2 leading-relaxed">{phase.description}</p>
+                    <p className="text-xs text-slate-500 leading-relaxed">{phase.description}</p>
+                  )}
+                  {/* Trigger progress bar */}
+                  {PHASE_TRIGGER[phase.number] && triggerCounts[phase.number] != null && (
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">
+                          Прогресс к триггеру
+                        </span>
+                        <span className="text-[10px] font-semibold text-slate-300">
+                          {triggerCounts[phase.number]}/{PHASE_TRIGGER[phase.number].target} {PHASE_TRIGGER[phase.number].label}
+                        </span>
+                      </div>
+                      <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-purple-500 transition-all"
+                          style={{
+                            width: `${Math.min(100, Math.round(triggerCounts[phase.number] / PHASE_TRIGGER[phase.number].target * 100))}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
                   )}
                   <PhaseTaskList tasks={phaseTasks} onOpen={setSelectedTask} />
                 </div>
