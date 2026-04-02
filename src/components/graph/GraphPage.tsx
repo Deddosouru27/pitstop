@@ -202,9 +202,9 @@ export default function GraphPage() {
 
     // Simulation
     const simulation = d3.forceSimulation<GraphNode>(simNodes)
-      .force('link', d3.forceLink<GraphNode, ResolvedLink>(simLinks).id(d => d.id).distance(60).strength(0.7))
-      .force('charge', d3.forceManyBody<GraphNode>().strength(-50))
-      .force('center', d3.forceCenter(W / 2, H / 2).strength(0.3))
+      .force('link', d3.forceLink<GraphNode, ResolvedLink>(simLinks).id(d => d.id).distance(50).strength(0.8))
+      .force('charge', d3.forceManyBody<GraphNode>().strength(-30))
+      .force('center', d3.forceCenter(W / 2, H / 2).strength(0.4))
       .force('collision', d3.forceCollide<GraphNode>().radius(d => nodeR(d.count, maxCount) + 6))
 
     // Drag
