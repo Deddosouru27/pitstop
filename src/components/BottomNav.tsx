@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { FolderOpen, Lightbulb, BarChart2, Brain, BookOpen, Target, Inbox, Settings } from 'lucide-react'
+import { FolderOpen, Lightbulb, BarChart2, Brain, BookOpen, Target, Inbox, Settings, Network } from 'lucide-react'
 import { useNewIdeasCount } from '../hooks/useNewIdeasCount'
 
 const tabs = [
@@ -8,6 +8,7 @@ const tabs = [
   { to: '/dashboard',  icon: BarChart2,  label: 'Stats',     badge: false },
   { to: '/memory',     icon: Brain,      label: 'Memory',    badge: false },
   { to: '/knowledge',  icon: BookOpen,   label: 'Knowledge', badge: false },
+  { to: '/graph',      icon: Network,    label: 'Graph',     badge: false },
   { to: '/domains',    icon: Target,     label: 'Домены',    badge: false },
   { to: '/ingested',   icon: Inbox,      label: 'Сырьё',     badge: false },
   { to: '/settings',   icon: Settings,   label: 'Settings',  badge: false },

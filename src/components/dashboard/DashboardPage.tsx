@@ -311,26 +311,36 @@ function CycleWidget() {
                     <p className="text-xs text-slate-500 leading-relaxed">{phase.description}</p>
                   )}
                   {/* Trigger progress bar */}
-                  {PHASE_TRIGGER[phase.number] && triggerCounts[phase.number] != null && (
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">
-                          Прогресс к триггеру
-                        </span>
-                        <span className="text-[10px] font-semibold text-slate-300">
-                          {triggerCounts[phase.number]}/{PHASE_TRIGGER[phase.number].target} {PHASE_TRIGGER[phase.number].label}
+                  {PHASE_TRIGGER[phase.number] && triggerCounts[phase.number] != null && (() => {
+                    const current = triggerCounts[phase.number]
+                    const { target, label } = PHASE_TRIGGER[phase.number]
+                    const unlocked = current >= target
+                    return unlocked ? (
+                      <div className="flex items-center gap-2 bg-emerald-900/20 border border-emerald-700/30 rounded-xl px-3 py-2">
+                        <span className="text-sm">✅</span>
+                        <span className="text-xs font-semibold text-emerald-400">
+                          {current}/{target} {label} — Phase {phase.number} разблокирована
                         </span>
                       </div>
-                      <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-purple-500 transition-all"
-                          style={{
-                            width: `${Math.min(100, Math.round(triggerCounts[phase.number] / PHASE_TRIGGER[phase.number].target * 100))}%`,
-                          }}
-                        />
+                    ) : (
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">
+                            Прогресс к триггеру
+                          </span>
+                          <span className="text-[10px] font-semibold text-slate-300">
+                            {current}/{target} {label}
+                          </span>
+                        </div>
+                        <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-purple-500 transition-all"
+                            style={{ width: `${Math.min(100, Math.round(current / target * 100))}%` }}
+                          />
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )
+                  })()}
                   <PhaseTaskList tasks={phaseTasks} onOpen={setSelectedTask} />
                 </div>
               )}

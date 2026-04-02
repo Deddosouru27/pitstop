@@ -358,7 +358,15 @@ function KnowledgeModal({ item, onClose, onOpenItem }: {
   )
 }
 
-function KnowledgeCard({ item, onOpen }: { item: ExtractedKnowledge; onOpen: (i: ExtractedKnowledge) => void }) {
+function KnowledgeCard({
+  item,
+  onOpen,
+  onEntityClick,
+}: {
+  item: ExtractedKnowledge
+  onOpen: (i: ExtractedKnowledge) => void
+  onEntityClick?: (entity: string) => void
+}) {
   const typeColor = (item.knowledge_type && TYPE_COLORS[item.knowledge_type]) ?? 'bg-slate-800 text-slate-400'
   const dateStr = new Date(item.created_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 
@@ -399,6 +407,24 @@ function KnowledgeCard({ item, onOpen }: { item: ExtractedKnowledge; onOpen: (i:
           </span>
         )}
       </div>
+
+      {/* Entities */}
+      {item.entities && item.entities.length > 0 && onEntityClick && (
+        <div className="flex gap-1 flex-wrap">
+          {item.entities.slice(0, 4).map(entity => (
+            <button
+              key={entity}
+              onClick={e => { e.stopPropagation(); onEntityClick(entity) }}
+              className="text-[10px] text-violet-400 bg-violet-900/30 border border-violet-700/30 px-1.5 py-0.5 rounded-full active:bg-violet-800/40 transition-colors"
+            >
+              {entity}
+            </button>
+          ))}
+          {item.entities.length > 4 && (
+            <span className="text-[10px] text-slate-600">+{item.entities.length - 4}</span>
+          )}
+        </div>
+      )}
 
       {/* source_url on card */}
       {item.source_url && (
@@ -560,11 +586,13 @@ function SourceGroupBlock({
   fallbackSourceType,
   items,
   onOpen,
+  onEntityClick,
 }: {
   sourceInfo: SourceInfo | null
   fallbackSourceType: string | null
   items: ExtractedKnowledge[]
   onOpen: (i: ExtractedKnowledge) => void
+  onEntityClick?: (entity: string) => void
 }) {
   const [expanded, setExpanded] = useState(false)
 
@@ -627,7 +655,7 @@ function SourceGroupBlock({
             </div>
           )}
           <div className="p-2 space-y-2">
-            {items.map(i => <KnowledgeCard key={i.id} item={i} onOpen={onOpen} />)}
+            {items.map(i => <KnowledgeCard key={i.id} item={i} onOpen={onOpen} onEntityClick={onEntityClick} />)}
           </div>
         </div>
       )}
@@ -841,6 +869,7 @@ export default function KnowledgePage() {
   const [selected, setSelected] = useState<ExtractedKnowledge | null>(null)
   const [groupMode, setGroupMode] = useState(false)
   const [sourceMap, setSourceMap] = useState<Map<string, SourceInfo>>(new Map())
+  const [entityFilter, setEntityFilter] = useState<string | null>(null)
 
   const types = useMemo(() => {
     const s = new Set<string>()
@@ -884,6 +913,7 @@ export default function KnowledgePage() {
       if (routeFilter === 'discard' && !routedContains(i.routed_to, 'discarded')) return false
       if (sourceFilter !== 'all' && (i.source_type ?? 'text') !== sourceFilter) return false
       if (search.trim() && !i.content.toLowerCase().includes(search.toLowerCase())) return false
+      if (entityFilter && !(i.entities ?? []).includes(entityFilter)) return false
       return true
     })
     if (sortBy === 'immediate') {
@@ -892,7 +922,7 @@ export default function KnowledgePage() {
       result = [...result].sort((a, b) => (b.strategic_relevance ?? 0) - (a.strategic_relevance ?? 0))
     }
     return result
-  }, [items, tabFilter, typeFilter, routeFilter, sourceFilter, search, sortBy])
+  }, [items, tabFilter, typeFilter, routeFilter, sourceFilter, search, sortBy, entityFilter])
 
   useEffect(() => {
     if (!groupMode) return
@@ -1201,6 +1231,20 @@ export default function KnowledgePage() {
         </div>
       )}
 
+      {/* Entity filter chip */}
+      {entityFilter && (
+        <div className="px-4 pb-2 flex items-center gap-2">
+          <span className="text-xs text-slate-500">Entity:</span>
+          <button
+            onClick={() => setEntityFilter(null)}
+            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full bg-violet-600/30 border border-violet-500/40 text-violet-300 active:bg-violet-600/50"
+          >
+            {entityFilter}
+            <X size={11} />
+          </button>
+        </div>
+      )}
+
       {/* List */}
       <div className="px-4 space-y-2 flex-1">
         {filtered.length === 0 ? (
@@ -1214,11 +1258,11 @@ export default function KnowledgePage() {
             </p>
           </div>
         ) : !groupMode ? (
-          filtered.map(i => <KnowledgeCard key={i.id} item={i} onOpen={setSelected} />)
+          filtered.map(i => <KnowledgeCard key={i.id} item={i} onOpen={setSelected} onEntityClick={setEntityFilter} />)
         ) : (
           groupedFiltered.map(entry => {
             if (entry.kind === 'singleton') {
-              return <KnowledgeCard key={entry.item.id} item={entry.item} onOpen={setSelected} />
+              return <KnowledgeCard key={entry.item.id} item={entry.item} onOpen={setSelected} onEntityClick={setEntityFilter} />
             }
             if (entry.kind === 'group') {
               return (
@@ -1228,6 +1272,7 @@ export default function KnowledgePage() {
                   fallbackSourceType={entry.fallbackSourceType}
                   items={entry.items}
                   onOpen={setSelected}
+                  onEntityClick={setEntityFilter}
                 />
               )
             }
@@ -1239,6 +1284,7 @@ export default function KnowledgePage() {
                 fallbackSourceType={entry.fallbackSourceType}
                 items={entry.items}
                 onOpen={setSelected}
+                onEntityClick={setEntityFilter}
               />
             )
           })

@@ -141,6 +141,7 @@ export interface ExtractedKnowledge {
   business_value: string | null
   ingested_content_id?: string | null
   superseded_by?: string | null
+  entities?: string[] | null
   has_embedding?: boolean
   created_at: string
 }

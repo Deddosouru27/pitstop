@@ -13,6 +13,7 @@ import IngestedPage from './components/ingested/IngestedPage'
 import DomainsPage from './components/domains/DomainsPage'
 import SettingsPage from './components/settings/SettingsPage'
 import SmokeTestPage from './components/smoke/SmokeTestPage'
+import GraphPage from './components/graph/GraphPage'
 
 function AppShell() {
   const { selectedTaskId, closeTask } = useApp()
@@ -33,6 +34,7 @@ function AppShell() {
           <Route path="/domains" element={<DomainsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/smoke-test" element={<SmokeTestPage />} />
+          <Route path="/graph" element={<GraphPage />} />
           <Route path="*" element={<Navigate to="/projects" replace />} />
         </Routes>
       </main>
