@@ -58,15 +58,21 @@ function buildGraphData(items: ExtractedKnowledge[]): { nodes: GraphNode[]; rawL
 
 // ── Visual helpers ────────────────────────────────────────────────────────────
 
+const KNOWN_TOOLS = new Set(['Claude', 'Supabase', 'Vercel', 'Railway',
+  'Haiku', 'Apify', 'Whisper', 'GitHub', 'Obsidian', 'Pinecone',
+  'Sentry', 'Stripe', 'Cohere', 'OpenAI', 'Playwright', 'MCP',
+  'Telegram', 'pgvector', 'LangChain'])
+const KNOWN_PROJECTS = new Set(['MAOS', 'Pitstop', 'Life RPG', 'MAOS Brain',
+  'MAOS Intake', 'MAOS Runner'])
+const KNOWN_CONCEPTS = new Set(['RAG', 'Embeddings', 'Knowledge Base',
+  'AI Agents', 'Graph Memory'])
+
 function entityColor(entity: string): string {
-  if (entity.startsWith('@')) return 'hsl(30, 80%, 60%)'
-  const palette = [
-    'hsl(210, 70%, 60%)', // blue — tools
-    'hsl(145, 58%, 52%)', // green — projects
-    'hsl(265, 62%, 62%)', // purple — concepts
-    'hsl(30, 78%, 58%)',  // orange — people
-  ]
-  return palette[entity.charCodeAt(0) % 4]
+  if (KNOWN_TOOLS.has(entity))    return '#3b82f6'
+  if (KNOWN_PROJECTS.has(entity)) return '#22c55e'
+  if (KNOWN_CONCEPTS.has(entity)) return '#a855f7'
+  if (entity.startsWith('@'))     return '#f97316'
+  return '#6b7280'
 }
 
 function nodeR(count: number, maxCount: number): number {
@@ -388,10 +394,11 @@ export default function GraphPage() {
       {!loading && graphNodes.length > 0 && (
         <div className="px-4 pb-2 flex flex-wrap gap-3 justify-center">
           {[
-            { color: 'hsl(210, 70%, 60%)', label: 'Инструменты' },
-            { color: 'hsl(145, 58%, 52%)', label: 'Проекты' },
-            { color: 'hsl(265, 62%, 62%)', label: 'Концепции' },
-            { color: 'hsl(30, 78%, 58%)',  label: 'Люди / @' },
+            { color: '#3b82f6', label: 'Инструменты' },
+            { color: '#22c55e', label: 'Проекты' },
+            { color: '#a855f7', label: 'Концепции' },
+            { color: '#f97316', label: 'Люди / @' },
+            { color: '#6b7280', label: 'Прочее' },
           ].map(({ color, label }) => (
             <span key={label} className="flex items-center gap-1.5 text-[10px] text-slate-500">
               <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
