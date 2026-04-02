@@ -79,50 +79,117 @@ function nodeR(count: number, maxCount: number): number {
   return 8 + ((count - 1) / Math.max(maxCount - 1, 1)) * 32
 }
 
+// ── Entity type helpers ───────────────────────────────────────────────────────
+
+function entityType(name: string): { label: string; cls: string } {
+  if (KNOWN_TOOLS.has(name))    return { label: 'tool',    cls: 'bg-blue-900/50 text-blue-400' }
+  if (KNOWN_PROJECTS.has(name)) return { label: 'project', cls: 'bg-emerald-900/50 text-emerald-400' }
+  if (KNOWN_CONCEPTS.has(name)) return { label: 'concept', cls: 'bg-purple-900/50 text-purple-400' }
+  if (name.startsWith('@'))     return { label: 'person',  cls: 'bg-orange-900/50 text-orange-400' }
+  return                               { label: 'entity',  cls: 'bg-slate-800 text-slate-400' }
+}
+
 // ── Node panel ────────────────────────────────────────────────────────────────
 
-function NodePanel({ node, allItems, onClose }: {
+function NodePanel({ node, allItems, neighbors, onClose, onSelectNode }: {
   node: GraphNode
   allItems: ExtractedKnowledge[]
+  neighbors: GraphNode[]
   onClose: () => void
+  onSelectNode: (n: GraphNode) => void
 }) {
+  const [expandedId, setExpandedId] = useState<string | null>(null)
   const items = useMemo(
     () => allItems.filter(i => node.itemIds.includes(i.id)),
     [node, allItems],
   )
+  const type = entityType(node.id)
+
   return (
     <div className="fixed inset-0 z-50 flex items-end" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60" />
       <div
-        className="relative w-full bg-[#13131a] rounded-t-3xl max-h-[70dvh] flex flex-col shadow-2xl"
+        className="relative w-full bg-[#13131a] rounded-t-3xl max-h-[80dvh] flex flex-col shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex justify-center pt-3 pb-1 shrink-0">
           <div className="w-10 h-1 bg-white/20 rounded-full" />
         </div>
+
+        {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 shrink-0">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: entityColor(node.id) }} />
-            <p className="text-slate-100 font-semibold text-sm">{node.id}</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="w-3 h-3 rounded-full shrink-0" style={{ background: entityColor(node.id) }} />
+            <p className="text-slate-100 font-semibold text-base">{node.id}</p>
+            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${type.cls}`}>
+              {type.label}
+            </span>
             <span className="text-[11px] text-slate-500 px-2 py-0.5 bg-white/5 rounded-full">
               {node.count} {node.count === 1 ? 'знание' : node.count < 5 ? 'знания' : 'знаний'}
             </span>
           </div>
-          <button onClick={onClose} className="text-slate-500 active:text-slate-300">
+          <button onClick={onClose} className="text-slate-500 active:text-slate-300 shrink-0">
             <X size={20} />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-5 pb-8 space-y-2">
-          {items.map(item => (
-            <div key={item.id} className="bg-white/[0.04] rounded-xl px-3 py-2.5 border border-white/[0.06] space-y-1">
-              <p className="text-sm text-slate-200 leading-relaxed line-clamp-3">{item.content}</p>
-              {item.knowledge_type && (
-                <span className="text-[10px] text-purple-400 bg-purple-900/40 px-1.5 py-0.5 rounded-full">
-                  {item.knowledge_type}
-                </span>
-              )}
+
+        <div className="flex-1 overflow-y-auto px-5 pb-8 space-y-4">
+          {/* Connected entities */}
+          {neighbors.length > 0 && (
+            <div>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider font-medium mb-2">
+                Связанные entity ({neighbors.length})
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {neighbors.map(n => (
+                  <button
+                    key={n.id}
+                    onClick={() => onSelectNode(n)}
+                    className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-white/5 border border-white/[0.06] text-slate-300 active:bg-white/10 transition-colors"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: entityColor(n.id) }} />
+                    {n.id}
+                    <span className="text-[9px] text-slate-600">{n.count}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          ))}
+          )}
+
+          {/* Knowledge items */}
+          <div>
+            <p className="text-[10px] text-slate-500 uppercase tracking-wider font-medium mb-2">
+              Знания
+            </p>
+            <div className="space-y-2">
+              {items.map(item => {
+                const isExpanded = expandedId === item.id
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => setExpandedId(isExpanded ? null : item.id)}
+                    className="w-full text-left bg-white/[0.04] rounded-xl px-3 py-2.5 border border-white/[0.06] space-y-1.5 active:bg-white/[0.07] transition-colors"
+                  >
+                    <p className={`text-sm text-slate-200 leading-relaxed ${isExpanded ? '' : 'line-clamp-2'}`}>
+                      {item.content}
+                    </p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {item.knowledge_type && (
+                        <span className="text-[10px] text-purple-400 bg-purple-900/40 px-1.5 py-0.5 rounded-full">
+                          {item.knowledge_type}
+                        </span>
+                      )}
+                      {item.business_value && (
+                        <span className="text-[10px] text-slate-500 line-clamp-1 flex-1">
+                          🎯 {item.business_value}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -163,6 +230,29 @@ export default function GraphPage() {
     () => graphNodes.length > 0 ? Math.max(...graphNodes.map(n => n.count)) : 1,
     [graphNodes],
   )
+
+  const nodeById = useMemo(
+    () => new Map(graphNodes.map(n => [n.id, n])),
+    [graphNodes],
+  )
+
+  // Precompute adjacency: entity id → neighbour ids
+  const adjacency = useMemo(() => {
+    const adj = new Map<string, Set<string>>()
+    for (const { source, target } of rawLinks) {
+      if (!adj.has(source)) adj.set(source, new Set())
+      if (!adj.has(target)) adj.set(target, new Set())
+      adj.get(source)!.add(target)
+      adj.get(target)!.add(source)
+    }
+    return adj
+  }, [rawLinks])
+
+  const selectedNeighbors = useMemo(() => {
+    if (!selectedNode) return []
+    const ids = adjacency.get(selectedNode.id) ?? new Set<string>()
+    return [...ids].map(id => nodeById.get(id)).filter((n): n is GraphNode => !!n)
+  }, [selectedNode, adjacency, nodeById])
 
   // ── D3 visualization ────────────────────────────────────────────────────────
 
@@ -409,7 +499,13 @@ export default function GraphPage() {
       )}
 
       {selectedNode && (
-        <NodePanel node={selectedNode} allItems={rawItems} onClose={() => setSelectedNode(null)} />
+        <NodePanel
+          node={selectedNode}
+          allItems={rawItems}
+          neighbors={selectedNeighbors}
+          onClose={() => setSelectedNode(null)}
+          onSelectNode={n => setSelectedNode(n)}
+        />
       )}
     </div>
   )
