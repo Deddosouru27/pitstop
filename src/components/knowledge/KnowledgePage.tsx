@@ -112,8 +112,8 @@ function KnowledgeModal({ item, onClose, onOpenItem }: {
 
       const { data: matches, error: rpcErr } = await supabase.rpc('match_knowledge', {
         query_embedding: embedding,
-        match_threshold: 0.65,
-        match_count: 4,
+        similarity_threshold: 0.5,
+        match_count: 5,
       })
       if (rpcErr) throw new Error(rpcErr.message)
       const results = ((matches as SimilarItem[]) ?? [])
@@ -860,7 +860,7 @@ export default function KnowledgePage() {
   const { items, loading, error, refresh } = useExtractedKnowledge()
   const [pageTab, setPageTab] = useState<PageTab>('knowledge')
   const [showPaste, setShowPaste] = useState(false)
-  const [tabFilter, setTabFilter] = useState<'all' | 'hot_backlog' | 'knowledge_base'>('all')
+
   const [typeFilter, setTypeFilter] = useState<string>('all')
   const [routeFilter, setRouteFilter] = useState<string>('all')
   const [sourceFilter, setSourceFilter] = useState<string>('all')
@@ -905,8 +905,7 @@ export default function KnowledgePage() {
 
   const filtered = useMemo(() => {
     let result = items.filter(i => {
-      if (tabFilter === 'hot_backlog' && !routedContains(i.routed_to, 'hot_backlog')) return false
-      if (tabFilter === 'knowledge_base' && !(routedContains(i.routed_to, 'knowledge_base') && !routedContains(i.routed_to, 'hot_backlog'))) return false
+
       if (typeFilter !== 'all' && i.knowledge_type !== typeFilter) return false
       if (routeFilter === 'hot' && !routedContains(i.routed_to, 'hot_backlog')) return false
       if (routeFilter === 'archive' && !(routedContains(i.routed_to, 'knowledge_base') && !routedContains(i.routed_to, 'hot_backlog'))) return false
@@ -922,7 +921,7 @@ export default function KnowledgePage() {
       result = [...result].sort((a, b) => (b.strategic_relevance ?? 0) - (a.strategic_relevance ?? 0))
     }
     return result
-  }, [items, tabFilter, typeFilter, routeFilter, sourceFilter, search, sortBy, entityFilter])
+  }, [items, typeFilter, routeFilter, sourceFilter, search, sortBy, entityFilter])
 
   useEffect(() => {
     if (!groupMode) return
@@ -1069,32 +1068,6 @@ export default function KnowledgePage() {
 
       {pageTab !== 'guides' && (
       <>
-      {/* Tabs */}
-      <div className="px-4 pb-3">
-        <div className="flex bg-white/5 rounded-2xl p-1 border border-white/[0.06]">
-          {([
-            { key: 'all',            label: 'Все',       count: items.length },
-            { key: 'hot_backlog',    label: '🔥 Горячее', count: tabCounts.hot_backlog },
-            { key: 'knowledge_base', label: '📚 Архив',   count: tabCounts.knowledge_base },
-          ] as const).map(tab => (
-            <button
-              key={tab.key}
-              onClick={() => setTabFilter(tab.key)}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-colors ${
-                tabFilter === tab.key
-                  ? 'bg-purple-600 text-white shadow-sm'
-                  : 'text-slate-500 active:text-slate-300'
-              }`}
-            >
-              {tab.label}
-              <span className={`text-[10px] ${tabFilter === tab.key ? 'text-purple-200' : 'text-slate-600'}`}>
-                {tab.count}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* Stats bar */}
       <div className="px-4 pb-3">
         <div className="bg-white/5 rounded-2xl px-4 py-3 border border-white/[0.06] space-y-1.5">
