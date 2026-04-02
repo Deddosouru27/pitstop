@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react'
-import { BookOpen, X, ExternalLink, Search, FileText } from 'lucide-react'
+import { BookOpen, X, ExternalLink, Search, FileText, ChevronDown } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { supabaseMemory } from '../../lib/supabaseMemory'
 import { useExtractedKnowledge } from '../../hooks/useExtractedKnowledge'
-import type { ExtractedKnowledge } from '../../types'
+import type { ExtractedKnowledge, MemoryHistory } from '../../types'
 
 const ROUTED_COLORS: Record<string, string> = {
   hot:            'bg-red-900/50 text-red-400',
@@ -69,15 +70,37 @@ function scoreBar(value: number | null, color: string) {
   )
 }
 
+function sourceLabel(url: string): string {
+  try {
+    const u = new URL(url)
+    const host = u.hostname.replace(/^www\./, '')
+    if (host.includes('instagram.com')) {
+      const m = u.pathname.match(/\/([^/?#]+)/)
+      return m ? `Instagram @${m[1]}` : 'Instagram'
+    }
+    if (host.includes('youtube.com') || host === 'youtu.be') return 'YouTube'
+    if (host.includes('t.me') || host.includes('telegram')) return 'Telegram'
+    return host
+  } catch {
+    return url.length > 30 ? url.slice(0, 30) + '…' : url
+  }
+}
+
 type SimilarItem = { id: string; content: string; similarity: number; knowledge_type: string | null }
 
-function KnowledgeModal({ item, onClose }: { item: ExtractedKnowledge; onClose: () => void }) {
+function KnowledgeModal({ item, onClose, onOpenItem }: {
+  item: ExtractedKnowledge
+  onClose: () => void
+  onOpenItem: (id: string) => void
+}) {
   const typeColor = (item.knowledge_type && TYPE_COLORS[item.knowledge_type]) ?? 'bg-slate-800 text-slate-400'
   const [rawText, setRawText] = useState<string | null>(null)
   const [rawLoading, setRawLoading] = useState(false)
   const [similar, setSimilar] = useState<SimilarItem[] | null>(null)
   const [similarLoading, setSimilarLoading] = useState(false)
   const [similarError, setSimilarError] = useState<string | null>(null)
+  const [history, setHistory] = useState<MemoryHistory[] | null>(null)
+  const [historyLoading, setHistoryLoading] = useState(false)
 
   async function loadRaw() {
     if (!item.ingested_content_id) return
@@ -122,6 +145,17 @@ function KnowledgeModal({ item, onClose }: { item: ExtractedKnowledge; onClose: 
     setSimilarLoading(false)
   }
 
+  async function loadHistory() {
+    setHistoryLoading(true)
+    const { data } = await supabaseMemory
+      .from('memory_history')
+      .select('*')
+      .eq('knowledge_id', item.id)
+      .order('created_at', { ascending: false })
+    setHistory(data ?? [])
+    setHistoryLoading(false)
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-end animate-fade-in" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60" />
@@ -150,6 +184,14 @@ function KnowledgeModal({ item, onClose }: { item: ExtractedKnowledge; onClose: 
               <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-cyan-900/50 text-cyan-400">
                 ready code
               </span>
+            )}
+            {item.superseded_by && (
+              <button
+                onClick={() => { onClose(); onOpenItem(item.superseded_by!) }}
+                className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-amber-900/50 text-amber-400 active:bg-amber-800/50"
+              >
+                ⚠️ Заменено →
+              </button>
             )}
           </div>
           <button onClick={onClose} className="text-slate-500 active:text-slate-300 transition-colors">
@@ -236,6 +278,59 @@ function KnowledgeModal({ item, onClose }: { item: ExtractedKnowledge; onClose: 
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+
+          {/* Memory history */}
+          <div>
+            <button
+              onClick={loadHistory}
+              disabled={historyLoading || history !== null}
+              className="flex items-center gap-2 text-xs text-slate-400 bg-white/5 active:bg-white/10 disabled:opacity-40 px-3 py-2 rounded-xl transition-colors w-fit"
+            >
+              📜 {historyLoading ? 'Загрузка...' : history !== null ? `История: ${history.length} изменений` : 'История записи'}
+            </button>
+            {history !== null && history.length === 0 && (
+              <p className="text-xs text-slate-600 mt-2 italic">Изменений не найдено</p>
+            )}
+            {history !== null && history.length > 0 && (
+              <div className="mt-2 space-y-2">
+                {history.map(h => {
+                  const actionCls =
+                    h.action?.toUpperCase() === 'ADD' ? 'bg-emerald-900/50 text-emerald-400' :
+                    h.action?.toUpperCase() === 'UPDATE' ? 'bg-amber-900/50 text-amber-400' :
+                    'bg-slate-800 text-slate-500'
+                  return (
+                    <div key={h.id} className="bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2.5 space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${actionCls}`}>
+                          {h.action}
+                        </span>
+                        <span className="text-[9px] text-slate-600 ml-auto">
+                          {new Date(h.created_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      {h.reason && (
+                        <p className="text-xs text-slate-400 leading-relaxed">{h.reason}</p>
+                      )}
+                      {(h.prev_value || h.new_value) && (
+                        <div className="space-y-1">
+                          {h.prev_value && (
+                            <p className="text-[10px] text-slate-600 font-mono line-clamp-2">
+                              − {h.prev_value.slice(0, 100)}
+                            </p>
+                          )}
+                          {h.new_value && (
+                            <p className="text-[10px] text-emerald-600 font-mono line-clamp-2">
+                              + {h.new_value.slice(0, 100)}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>
@@ -358,6 +453,43 @@ function KnowledgeCard({ item, onOpen }: { item: ExtractedKnowledge; onOpen: (i:
         </div>
       )}
     </button>
+  )
+}
+
+function SourceGroupBlock({
+  sourceUrl,
+  items,
+  onOpen,
+}: {
+  sourceUrl: string
+  items: ExtractedKnowledge[]
+  onOpen: (i: ExtractedKnowledge) => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const label = sourceLabel(sourceUrl)
+
+  return (
+    <div className="border border-white/[0.06] rounded-2xl overflow-hidden">
+      <button
+        onClick={() => setExpanded(v => !v)}
+        className="w-full flex items-center gap-2 px-4 py-3 bg-white/[0.03] active:bg-white/[0.07] text-left transition-colors"
+      >
+        <span className="text-sm">📦</span>
+        <p className="flex-1 text-xs text-slate-400 font-medium">
+          {items.length} знаний из одного источника
+        </p>
+        <span className="text-[10px] text-slate-600 truncate max-w-[100px]">{label}</span>
+        <ChevronDown
+          size={13}
+          className={`shrink-0 text-slate-600 transition-transform ${expanded ? 'rotate-180' : ''}`}
+        />
+      </button>
+      {expanded && (
+        <div className="p-2 space-y-2">
+          {items.map(i => <KnowledgeCard key={i.id} item={i} onOpen={onOpen} />)}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -615,9 +747,27 @@ export default function KnowledgePage() {
     } else if (sortBy === 'strategic') {
       result = [...result].sort((a, b) => (b.strategic_relevance ?? 0) - (a.strategic_relevance ?? 0))
     }
-    // default: date order preserved from fetch
     return result
   }, [items, tabFilter, typeFilter, routeFilter, sourceFilter, search, sortBy])
+
+  // Group by source_url — preserves order of first occurrence
+  const groupedFiltered = useMemo(() => {
+    const urlGroups = new Map<string, ExtractedKnowledge[]>()
+    const order: string[] = []
+    for (const item of filtered) {
+      const key = item.source_url ?? `__solo_${item.id}`
+      if (!urlGroups.has(key)) {
+        urlGroups.set(key, [])
+        order.push(key)
+      }
+      urlGroups.get(key)!.push(item)
+    }
+    return order.map(key => ({
+      key,
+      source_url: key.startsWith('__solo_') ? null : key,
+      items: urlGroups.get(key)!,
+    }))
+  }, [filtered])
 
   if (loading) {
     return <div className="flex items-center justify-center h-48 text-slate-500 text-sm">Loading...</div>
@@ -815,11 +965,32 @@ export default function KnowledgePage() {
             </p>
           </div>
         ) : (
-          filtered.map(i => <KnowledgeCard key={i.id} item={i} onOpen={setSelected} />)
+          groupedFiltered.map(group => {
+            if (!group.source_url || group.items.length === 1) {
+              return group.items.map(i => <KnowledgeCard key={i.id} item={i} onOpen={setSelected} />)
+            }
+            return (
+              <SourceGroupBlock
+                key={group.key}
+                sourceUrl={group.source_url}
+                items={group.items}
+                onOpen={setSelected}
+              />
+            )
+          })
         )}
       </div>
 
-      {selected && <KnowledgeModal item={selected} onClose={() => setSelected(null)} />}
+      {selected && (
+        <KnowledgeModal
+          item={selected}
+          onClose={() => setSelected(null)}
+          onOpenItem={(id) => {
+            const found = items.find(i => i.id === id)
+            if (found) setSelected(found)
+          }}
+        />
+      )}
 
       {showPaste && (
         <PasteModal

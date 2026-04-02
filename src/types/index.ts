@@ -140,7 +140,18 @@ export interface ExtractedKnowledge {
   source_type: string | null
   business_value: string | null
   ingested_content_id?: string | null
+  superseded_by?: string | null
   has_embedding?: boolean
+  created_at: string
+}
+
+export interface MemoryHistory {
+  id: string
+  action: string
+  prev_value: string | null
+  new_value: string | null
+  reason: string | null
+  knowledge_id: string | null
   created_at: string
 }
 

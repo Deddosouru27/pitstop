@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import type { ExtractedKnowledge } from '../types'
 
 // Explicit select excludes the embedding vector column (can be several KB per row)
-const FIELDS = 'id,content,knowledge_type,project_id,immediate_relevance,strategic_relevance,novelty,effort,has_ready_code,routed_to,tags,source_url,source_type,business_value,ingested_content_id,created_at'
+const FIELDS = 'id,content,knowledge_type,project_id,immediate_relevance,strategic_relevance,novelty,effort,has_ready_code,routed_to,tags,source_url,source_type,business_value,ingested_content_id,superseded_by,created_at'
 
 export function useExtractedKnowledge() {
   const [items, setItems] = useState<ExtractedKnowledge[]>([])
