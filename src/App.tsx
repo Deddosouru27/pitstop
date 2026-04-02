@@ -15,6 +15,7 @@ import SettingsPage from './components/settings/SettingsPage'
 import SmokeTestPage from './components/smoke/SmokeTestPage'
 import GraphPage from './components/graph/GraphPage'
 import AgentLogsPage from './components/agent-logs/AgentLogsPage'
+import AgentMonitorPage from './components/agents/AgentMonitorPage'
 
 function AppShell() {
   const { selectedTaskId, closeTask } = useApp()
@@ -37,6 +38,7 @@ function AppShell() {
           <Route path="/smoke-test" element={<SmokeTestPage />} />
           <Route path="/graph" element={<GraphPage />} />
           <Route path="/agent-logs" element={<AgentLogsPage />} />
+          <Route path="/agents" element={<AgentMonitorPage />} />
           <Route path="*" element={<Navigate to="/projects" replace />} />
         </Routes>
       </main>
