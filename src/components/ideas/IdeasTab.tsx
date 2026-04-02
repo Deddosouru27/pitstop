@@ -3,6 +3,7 @@ import { Lightbulb, ChevronDown, CheckSquare, Square, X, Users } from 'lucide-re
 import { useAllIdeas } from '../../hooks/useAllIdeas'
 import { useApp } from '../../context/AppContext'
 import IdeaDetailModal from './IdeaDetailModal'
+import { supabase } from '../../lib/supabase'
 import type { Idea } from '../../types'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -217,44 +218,58 @@ function GroupBlock({
 
 function BulkBar({
   count,
+  total,
   onAccept,
   onDefer,
   onDismiss,
+  onSelectAll,
   onClear,
 }: {
   count: number
+  total: number
   onAccept: () => void
   onDefer: () => void
   onDismiss: () => void
+  onSelectAll: () => void
   onClear: () => void
 }) {
   return (
     <div className="fixed bottom-[72px] left-0 right-0 z-40 px-4">
-      <div className="bg-[#1c1c2e] border border-white/10 rounded-2xl px-4 py-3 shadow-2xl flex items-center gap-3">
-        <span className="text-xs text-slate-400 font-medium shrink-0">{count} выбрано</span>
-        <div className="flex-1 flex items-center gap-2 justify-end">
+      <div className="bg-[#1c1c2e] border border-white/10 rounded-2xl px-4 py-3 shadow-2xl space-y-2">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-400 font-medium">
+            Выбрано: <span className="text-slate-200">{count}</span> из {total}
+          </span>
+          <button
+            onClick={onSelectAll}
+            className="text-[10px] text-purple-400 active:text-purple-300 underline underline-offset-2 ml-1"
+          >
+            {count === total ? 'Снять все' : 'Выбрать все'}
+          </button>
+          <button onClick={onClear} className="text-slate-600 active:text-slate-400 ml-auto">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="flex items-center gap-2">
           <button
             onClick={onAccept}
-            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl bg-emerald-600/20 text-emerald-400 active:bg-emerald-600/30 transition-colors"
+            className="flex-1 text-xs font-medium py-2 rounded-xl bg-emerald-600/20 text-emerald-400 active:bg-emerald-600/30 transition-colors"
           >
-            ✅ В работу
+            ✅ Принять
           </button>
           <button
             onClick={onDefer}
-            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl bg-amber-600/20 text-amber-400 active:bg-amber-600/30 transition-colors"
+            className="flex-1 text-xs font-medium py-2 rounded-xl bg-amber-600/20 text-amber-400 active:bg-amber-600/30 transition-colors"
           >
             📌 Позже
           </button>
           <button
             onClick={onDismiss}
-            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl bg-red-600/20 text-red-400 active:bg-red-600/30 transition-colors"
+            className="flex-1 text-xs font-medium py-2 rounded-xl bg-red-600/20 text-red-400 active:bg-red-600/30 transition-colors"
           >
             🗑 Отклонить
           </button>
         </div>
-        <button onClick={onClear} className="text-slate-600 active:text-slate-400 shrink-0">
-          <X size={16} />
-        </button>
       </div>
     </div>
   )
@@ -323,7 +338,32 @@ export default function IdeasTab() {
     setSelectedIds(new Set())
   }
 
-  async function bulkAction(status: 'accepted' | 'dismissed' | 'deferred') {
+  function selectAll() {
+    setSelectedIds(new Set(filtered.map(i => i.id)))
+  }
+
+  async function bulkAccept() {
+    const selectedIdeas = filtered.filter(i => selectedIds.has(i.id))
+    const ids = selectedIdeas.map(i => i.id)
+    exitSelectMode()
+    await updateStatus(ids, 'accepted')
+    await Promise.all(
+      selectedIdeas.map(idea =>
+        supabase.from('tasks').insert({
+          title: idea.summary?.trim() || idea.content.slice(0, 80),
+          description: idea.content,
+          project_id: idea.project_id ?? null,
+          priority: 'medium',
+          due_date: null,
+          status: 'todo',
+          is_completed: false,
+        })
+      )
+    )
+    await Promise.all(ids.map(id => markConverted(id)))
+  }
+
+  async function bulkAction(status: 'dismissed' | 'deferred') {
     const ids = Array.from(selectedIds)
     exitSelectMode()
     await updateStatus(ids, status)
@@ -463,9 +503,11 @@ export default function IdeasTab() {
       {selectMode && selectedIds.size > 0 && (
         <BulkBar
           count={selectedIds.size}
-          onAccept={() => bulkAction('accepted')}
+          total={filtered.length}
+          onAccept={bulkAccept}
           onDefer={() => bulkAction('deferred')}
           onDismiss={() => bulkAction('dismissed')}
+          onSelectAll={selectAll}
           onClear={exitSelectMode}
         />
       )}
