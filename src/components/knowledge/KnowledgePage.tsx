@@ -1023,21 +1023,33 @@ export default function KnowledgePage() {
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="px-4 pb-4">
-        <div className="grid grid-cols-3 gap-2">
-          <div className="bg-white/5 rounded-2xl px-3 py-3 border border-white/[0.06]">
-            <p className="text-[11px] text-slate-500 uppercase tracking-wider font-medium">Всего</p>
-            <p className="text-2xl font-bold text-slate-100 mt-0.5">{stats.total}</p>
-          </div>
-          <div className="bg-white/5 rounded-2xl px-3 py-3 border border-white/[0.06]">
-            <p className="text-[11px] text-slate-500 uppercase tracking-wider font-medium">Hot</p>
-            <p className="text-2xl font-bold text-red-400 mt-0.5">{stats.hot}</p>
-          </div>
-          <div className="bg-white/5 rounded-2xl px-3 py-3 border border-white/[0.06]">
-            <p className="text-[11px] text-slate-500 uppercase tracking-wider font-medium">Strategic</p>
-            <p className="text-2xl font-bold text-blue-400 mt-0.5">{stats.strategic}</p>
-          </div>
+      {/* Stats bar */}
+      <div className="px-4 pb-3">
+        <div className="bg-white/5 rounded-2xl px-4 py-3 border border-white/[0.06] space-y-1.5">
+          {/* Source breakdown */}
+          <p className="text-xs text-slate-400 leading-relaxed">
+            <span className="font-semibold text-slate-200">{stats.total}</span>
+            <span className="text-slate-600"> знаний</span>
+            {(['instagram', 'youtube', 'link', 'article'] as const)
+              .filter(s => (sourceCounts[s] ?? 0) > 0)
+              .map(s => {
+                const icon = s === 'instagram' ? '📸' : s === 'youtube' ? '🎬' : '📰'
+                return (
+                  <span key={s}>
+                    <span className="text-slate-600"> · </span>
+                    <span>{icon} </span>
+                    <span className="font-medium text-slate-300">{sourceCounts[s]}</span>
+                    <span className="text-slate-600"> {s === 'instagram' ? 'Instagram' : s === 'youtube' ? 'YouTube' : 'Article'}</span>
+                  </span>
+                )
+              })}
+          </p>
+          {/* Hot / archive */}
+          <p className="text-xs text-slate-500">
+            <span className="text-red-400 font-medium">🔥 {stats.hot} hot</span>
+            <span className="text-slate-600"> · </span>
+            <span className="text-blue-400 font-medium">📚 {tabCounts.knowledge_base} archive</span>
+          </p>
         </div>
       </div>
 
