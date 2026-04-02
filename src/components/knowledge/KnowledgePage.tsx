@@ -574,17 +574,48 @@ function GuidesTab() {
   )
 }
 
+const SOURCE_ICON: Record<string, string> = {
+  instagram:      '📸',
+  youtube:        '🎬',
+  link:           '📰',
+  article:        '📰',
+  telegram:       '✈',
+  text:           '📝',
+  'manual-paste': '📝',
+}
+
 function SourceGroupBlock({
   sourceUrl,
+  sourceType,
+  ingestedContentId,
   items,
   onOpen,
 }: {
   sourceUrl: string
+  sourceType: string | null
+  ingestedContentId: string | null | undefined
   items: ExtractedKnowledge[]
   onOpen: (i: ExtractedKnowledge) => void
 }) {
   const [expanded, setExpanded] = useState(false)
-  const label = sourceLabel(sourceUrl)
+  const [meta, setMeta] = useState<{ title: string | null; summary: string | null } | null>(null)
+
+  // Lazy-fetch ingested_content title+summary once on first render
+  useState(() => {
+    if (!ingestedContentId) return
+    supabase
+      .from('ingested_content')
+      .select('title,summary')
+      .eq('id', ingestedContentId)
+      .single()
+      .then(({ data }) => {
+        if (data) setMeta({ title: data.title ?? null, summary: data.summary ?? null })
+      })
+  })
+
+  const icon = SOURCE_ICON[sourceType ?? ''] ?? '📦'
+  const name = meta?.title ?? sourceLabel(sourceUrl)
+  const topic = meta?.summary ? meta.summary.slice(0, 50) + (meta.summary.length > 50 ? '…' : '') : null
 
   return (
     <div className="border border-white/[0.06] rounded-2xl overflow-hidden">
@@ -592,11 +623,14 @@ function SourceGroupBlock({
         onClick={() => setExpanded(v => !v)}
         className="w-full flex items-center gap-2 px-4 py-3 bg-white/[0.03] active:bg-white/[0.07] text-left transition-colors"
       >
-        <span className="text-sm">📦</span>
-        <p className="flex-1 text-xs text-slate-400 font-medium">
-          {items.length} знаний из одного источника
-        </p>
-        <span className="text-[10px] text-slate-600 truncate max-w-[100px]">{label}</span>
+        <span className="text-base shrink-0">{icon}</span>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs text-slate-200 font-medium truncate">
+            {name}
+            {topic && <span className="text-slate-500 font-normal"> — {topic}</span>}
+          </p>
+        </div>
+        <span className="shrink-0 text-[11px] font-semibold text-slate-500 ml-1">({items.length})</span>
         <ChevronDown
           size={13}
           className={`shrink-0 text-slate-600 transition-transform ${expanded ? 'rotate-180' : ''}`}
@@ -815,6 +849,7 @@ export default function KnowledgePage() {
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<SortKey>('date')
   const [selected, setSelected] = useState<ExtractedKnowledge | null>(null)
+  const [groupMode, setGroupMode] = useState(false)
 
   const types = useMemo(() => {
     const s = new Set<string>()
@@ -910,6 +945,18 @@ export default function KnowledgePage() {
         <div className="flex items-center gap-2">
           <BookOpen size={20} className="text-purple-400 shrink-0" strokeWidth={1.75} />
           <h1 className="flex-1 text-2xl font-bold text-slate-100">Knowledge</h1>
+          {pageTab === 'knowledge' && (
+            <button
+              onClick={() => setGroupMode(v => !v)}
+              className={`text-xs font-medium px-3 py-2 rounded-xl transition-colors border ${
+                groupMode
+                  ? 'bg-purple-600/20 border-purple-500/40 text-purple-300'
+                  : 'bg-white/5 border-white/[0.06] text-slate-400'
+              }`}
+            >
+              📦 {groupMode ? 'Группы' : 'Группировать'}
+            </button>
+          )}
           <button
             onClick={() => setShowPaste(true)}
             className="flex items-center gap-1.5 bg-purple-600/20 active:bg-purple-600/40 text-purple-300 text-xs font-medium px-3 py-2 rounded-xl transition-colors"
@@ -1115,15 +1162,20 @@ export default function KnowledgePage() {
               {items.length === 0 ? 'Запусти /autorun чтобы система начала извлекать знания' : 'Попробуй другой фильтр'}
             </p>
           </div>
+        ) : !groupMode ? (
+          filtered.map(i => <KnowledgeCard key={i.id} item={i} onOpen={setSelected} />)
         ) : (
           groupedFiltered.map(group => {
             if (!group.source_url || group.items.length === 1) {
               return group.items.map(i => <KnowledgeCard key={i.id} item={i} onOpen={setSelected} />)
             }
+            const first = group.items[0]
             return (
               <SourceGroupBlock
                 key={group.key}
                 sourceUrl={group.source_url}
+                sourceType={first.source_type}
+                ingestedContentId={first.ingested_content_id}
                 items={group.items}
                 onOpen={setSelected}
               />
