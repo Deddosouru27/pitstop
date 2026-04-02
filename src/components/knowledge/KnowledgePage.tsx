@@ -573,20 +573,11 @@ function SourceGroupBlock({
 
   const rawTitle = sourceInfo?.title ?? ''
 
-  function getGroupTitle(): string {
-    const summary = (sourceInfo?.summary ?? '').trim()
-    if (summary.length > 10) return summary.slice(0, 80)
-    const title = rawTitle.trim()
-    if (
-      title.length > 10 &&
-      !title.startsWith('Instagram @') &&
-      !title.startsWith('Instagram ')
-    ) return title.slice(0, 80)
-    const firstContent = items[0]?.content
-    if (firstContent) return firstContent.slice(0, 80) + '...'
-    return 'Без заголовка'
-  }
-  const topic = getGroupTitle()
+  const topic =
+    sourceInfo?.summary ||
+    (sourceInfo?.title && !sourceInfo.title.startsWith('Instagram') ? sourceInfo.title : null) ||
+    (items[0]?.content ? items[0].content.slice(0, 80) + '...' : null) ||
+    'Без заголовка'
 
   // Creator = @handle extracted from title only if it looks like a handle, not a URL
   const creatorMatch = rawTitle.match(/@([\w.]+)/)
