@@ -80,7 +80,6 @@ function KnowledgeModal({ item, onClose, onOpenItem }: {
   const [rawLoading, setRawLoading] = useState(false)
   const [similar, setSimilar] = useState<SimilarItem[] | null>(null)
   const [similarLoading, setSimilarLoading] = useState(false)
-  const [similarError, setSimilarError] = useState<string | null>(null)
   const [history, setHistory] = useState<MemoryHistory[] | null>(null)
   const [historyLoading, setHistoryLoading] = useState(false)
 
@@ -98,7 +97,6 @@ function KnowledgeModal({ item, onClose, onOpenItem }: {
 
   async function loadSimilar() {
     setSimilarLoading(true)
-    setSimilarError(null)
     try {
       // Fetch embedding for this item only
       const { data: embData, error: embErr } = await supabase
@@ -121,8 +119,7 @@ function KnowledgeModal({ item, onClose, onOpenItem }: {
         .slice(0, 3)
       setSimilar(results)
     } catch (e) {
-      setSimilarError(e instanceof Error ? e.message : 'Ошибка')
-      setSimilar([])
+      setSimilar([]) // silently treat RPC errors as "no results"
     }
     setSimilarLoading(false)
   }
@@ -239,11 +236,8 @@ function KnowledgeModal({ item, onClose, onOpenItem }: {
                 🔗 {similarLoading ? 'Поиск...' : '🔗 Связанные'}
               </button>
             )}
-            {similar !== null && similar.length === 0 && !similarError && (
+            {similar !== null && similar.length === 0 && (
               <p className="text-xs text-slate-600 mt-2 italic">Похожих не найдено</p>
-            )}
-            {similarError && (
-              <p className="text-xs text-red-400 mt-2">{similarError}</p>
             )}
             {similar && similar.length > 0 && (
               <div className="mt-2 space-y-2">

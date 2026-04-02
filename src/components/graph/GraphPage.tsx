@@ -70,7 +70,7 @@ function entityColor(entity: string): string {
 }
 
 function nodeR(count: number, maxCount: number): number {
-  return 7 + ((count - 1) / Math.max(maxCount - 1, 1)) * 16
+  return 8 + ((count - 1) / Math.max(maxCount - 1, 1)) * 32
 }
 
 // ── Node panel ────────────────────────────────────────────────────────────────
@@ -202,10 +202,10 @@ export default function GraphPage() {
 
     // Simulation
     const simulation = d3.forceSimulation<GraphNode>(simNodes)
-      .force('link', d3.forceLink<GraphNode, ResolvedLink>(simLinks).id(d => d.id).distance(80).strength(0.5))
-      .force('charge', d3.forceManyBody<GraphNode>().strength(-280))
-      .force('center', d3.forceCenter(W / 2, H / 2))
-      .force('collision', d3.forceCollide<GraphNode>().radius(d => nodeR(d.count, maxCount) + 8))
+      .force('link', d3.forceLink<GraphNode, ResolvedLink>(simLinks).id(d => d.id).distance(60).strength(0.7))
+      .force('charge', d3.forceManyBody<GraphNode>().strength(-50))
+      .force('center', d3.forceCenter(W / 2, H / 2).strength(0.3))
+      .force('collision', d3.forceCollide<GraphNode>().radius(d => nodeR(d.count, maxCount) + 6))
 
     // Drag
     const drag = d3.drag<SVGGElement, GraphNode>()
@@ -244,13 +244,13 @@ export default function GraphPage() {
       .attr('stroke', d => entityColor(d.id))
       .attr('stroke-width', 1.5)
 
-    // Labels always visible
+    // Labels always visible, size scales with node
     node.append('text')
       .text(d => d.id.length > 16 ? d.id.slice(0, 15) + '…' : d.id)
       .attr('text-anchor', 'middle')
-      .attr('dy', d => nodeR(d.count, maxCount) + 11)
-      .attr('font-size', 9)
-      .attr('fill', 'rgba(255,255,255,0.55)')
+      .attr('dy', d => nodeR(d.count, maxCount) + 12)
+      .attr('font-size', d => Math.round(10 + ((d.count - 1) / Math.max(maxCount - 1, 1)) * 4))
+      .attr('fill', 'rgba(255,255,255,0.65)')
       .style('pointer-events', 'none')
       .style('user-select', 'none')
 
