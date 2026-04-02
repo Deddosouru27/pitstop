@@ -93,9 +93,76 @@ function KnowledgeStatsWidget() {
   )
 }
 
+// ── Autorun status ────────────────────────────────────────────────────────────
+
+function AutorunStatus() {
+  const [lastLog, setLastLog] = useState<{
+    action: string | null
+    status: string | null
+    created_at: string
+    details: Record<string, unknown> | null
+  } | null>(null)
+  const [todoCount, setTodoCount] = useState<number>(0)
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([
+      supabase
+        .from('agent_action_log')
+        .select('action, status, created_at, details')
+        .order('created_at', { ascending: false })
+        .limit(1),
+      supabase
+        .from('tasks')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'todo'),
+    ]).then(([logRes, todoRes]) => {
+      if (cancelled) return
+      setLastLog((logRes.data?.[0] as typeof lastLog) ?? null)
+      setTodoCount(todoRes.count ?? 0)
+    })
+    return () => { cancelled = true }
+  }, [])
+
+  const isActive = lastLog
+    ? (Date.now() - new Date(lastLog.created_at).getTime()) < 30 * 60 * 1000
+    : false
+
+  const lastTaskTitle =
+    (lastLog?.details as Record<string, unknown> | null)?.task_title as string | undefined ??
+    lastLog?.action ??
+    null
+
+  const lastOk = lastLog?.status
+    ? !lastLog.status.toLowerCase().includes('fail') && !lastLog.status.toLowerCase().includes('error')
+    : true
+
+  return (
+    <div className="bg-white/5 rounded-2xl px-4 py-3 border border-white/[0.06] space-y-1.5">
+      <div className="flex items-center gap-2">
+        <span className={`w-2 h-2 rounded-full shrink-0 ${isActive ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
+        <p className="text-xs font-semibold text-slate-300">
+          🤖 Autorun: <span className={isActive ? 'text-emerald-400' : 'text-slate-500'}>{isActive ? 'активен' : 'остановлен'}</span>
+        </p>
+        {todoCount > 0 && (
+          <span className="ml-auto text-[10px] text-slate-500 bg-white/5 px-2 py-0.5 rounded-full">
+            {todoCount} в очереди
+          </span>
+        )}
+      </div>
+      {lastTaskTitle && (
+        <p className="text-xs text-slate-500 pl-4">
+          Последняя: <span className="text-slate-300">{lastTaskTitle}</span>{' '}
+          {lastOk ? '✅' : '❌'}
+        </p>
+      )}
+    </div>
+  )
+}
+
 // ── Entity graph stats ────────────────────────────────────────────────────────
 
-function EntityGraphStats() {
+function EntityGraphStats({ compact }: { compact?: boolean }) {
   const [stats, setStats] = useState<{ nodes: number; edges: number; bindings: number } | null>(null)
 
   useEffect(() => {
@@ -118,15 +185,21 @@ function EntityGraphStats() {
 
   if (!stats) return null
 
+  const text = (
+    <p className={`${compact ? 'text-[11px] text-amber-400/80' : 'text-xs text-slate-500'}`}>
+      🕸 <span className={compact ? 'text-amber-300 font-medium' : 'text-slate-300 font-medium'}>{stats.nodes}</span> сущностей
+      <span className={compact ? 'text-amber-600' : 'text-slate-700'}> · </span>
+      <span className={compact ? 'text-amber-300 font-medium' : 'text-slate-300 font-medium'}>{stats.edges}</span> связей
+      <span className={compact ? 'text-amber-600' : 'text-slate-700'}> · </span>
+      <span className={compact ? 'text-amber-300 font-medium' : 'text-slate-300 font-medium'}>{stats.bindings}</span> привязок
+    </p>
+  )
+
+  if (compact) return text
+
   return (
     <div className="bg-white/5 rounded-2xl px-4 py-3 border border-white/[0.06]">
-      <p className="text-xs text-slate-500">
-        🕸 <span className="text-slate-300 font-medium">{stats.nodes}</span> сущностей
-        <span className="text-slate-700"> · </span>
-        <span className="text-slate-300 font-medium">{stats.edges}</span> связей
-        <span className="text-slate-700"> · </span>
-        <span className="text-slate-300 font-medium">{stats.bindings}</span> привязок
-      </p>
+      {text}
     </div>
   )
 }
@@ -420,7 +493,21 @@ export default function DashboardPage() {
         <p className="text-sm text-slate-500 mt-0.5">Активность агента</p>
       </div>
 
+      {/* Cycle 1 complete banner */}
+      <div className="px-4 pb-2">
+        <div className="bg-gradient-to-r from-amber-900/30 to-yellow-900/20 border border-amber-700/30 rounded-2xl px-4 py-3 space-y-1">
+          <p className="text-sm font-semibold text-amber-300">
+            🏆 Cycle 1: MAOS Brain — COMPLETE
+          </p>
+          <p className="text-xs text-amber-500/80">29.03 → 02.04</p>
+          <EntityGraphStats compact />
+        </div>
+      </div>
+
       <div className="px-4 space-y-6">
+        {/* Autorun status */}
+        <AutorunStatus />
+
         {/* Stat cards */}
         <div className="grid grid-cols-2 gap-2">
           <StatCard
@@ -447,9 +534,6 @@ export default function DashboardPage() {
 
         {/* Knowledge stats */}
         <KnowledgeStatsWidget />
-
-        {/* Entity graph stats */}
-        <EntityGraphStats />
 
         {/* Bar chart */}
         <div className="bg-white/5 rounded-2xl px-4 pt-4 pb-2 border border-white/[0.06]">
