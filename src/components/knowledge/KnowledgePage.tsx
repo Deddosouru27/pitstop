@@ -571,13 +571,22 @@ function SourceGroupBlock({
   const sourceType = sourceInfo?.source_type ?? fallbackSourceType
   const srcCfg = SOURCE_TYPE_CFG[sourceType ?? ''] ?? { label: '📦 Unknown', cls: 'bg-slate-800 text-slate-400' }
 
-  // Topic: summary stripped of technical noise, else title, else fallback
-  const rawSummary = sourceInfo?.summary ?? ''
-  const cleanSummary = rawSummary.replace(/\s*\([^)]*\)\s*/g, ' ').trim()
   const rawTitle = sourceInfo?.title ?? ''
-  // Strip "(audio+caption)" etc from title too
-  const cleanTitle = rawTitle.replace(/\s*\([^)]*\)\s*/g, ' ').trim()
-  const topic = (cleanSummary || cleanTitle || 'Знания без заголовка').slice(0, 70)
+
+  function getGroupTitle(): string {
+    const summary = (sourceInfo?.summary ?? '').trim()
+    if (summary.length > 10) return summary.slice(0, 80)
+    const title = rawTitle.trim()
+    if (
+      title.length > 10 &&
+      !title.startsWith('Instagram @') &&
+      !title.startsWith('Instagram ')
+    ) return title.slice(0, 80)
+    const firstContent = items[0]?.content
+    if (firstContent) return firstContent.slice(0, 80) + '...'
+    return 'Без заголовка'
+  }
+  const topic = getGroupTitle()
 
   // Creator = @handle extracted from title only if it looks like a handle, not a URL
   const creatorMatch = rawTitle.match(/@([\w.]+)/)
