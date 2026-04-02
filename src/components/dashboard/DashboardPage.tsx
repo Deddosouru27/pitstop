@@ -93,6 +93,44 @@ function KnowledgeStatsWidget() {
   )
 }
 
+// ── Entity graph stats ────────────────────────────────────────────────────────
+
+function EntityGraphStats() {
+  const [stats, setStats] = useState<{ nodes: number; edges: number; bindings: number } | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([
+      supabase.from('entity_nodes').select('*', { count: 'exact', head: true }),
+      supabase.from('entity_edges').select('*', { count: 'exact', head: true }),
+      supabase.from('knowledge_entities').select('*', { count: 'exact', head: true }),
+    ]).then(([nodesRes, edgesRes, bindingsRes]) => {
+      if (cancelled) return
+      const nodes = nodesRes.count ?? 0
+      const edges = edgesRes.count ?? 0
+      const bindings = bindingsRes.count ?? 0
+      if (nodes > 0 || edges > 0 || bindings > 0) {
+        setStats({ nodes, edges, bindings })
+      }
+    })
+    return () => { cancelled = true }
+  }, [])
+
+  if (!stats) return null
+
+  return (
+    <div className="bg-white/5 rounded-2xl px-4 py-3 border border-white/[0.06]">
+      <p className="text-xs text-slate-500">
+        🕸 <span className="text-slate-300 font-medium">{stats.nodes}</span> сущностей
+        <span className="text-slate-700"> · </span>
+        <span className="text-slate-300 font-medium">{stats.edges}</span> связей
+        <span className="text-slate-700"> · </span>
+        <span className="text-slate-300 font-medium">{stats.bindings}</span> привязок
+      </p>
+    </div>
+  )
+}
+
 // ── Cycle widget ──────────────────────────────────────────────────────────────
 
 const PHASE_ICON: Record<CyclePlanPhase['status'], string> = {
@@ -409,6 +447,9 @@ export default function DashboardPage() {
 
         {/* Knowledge stats */}
         <KnowledgeStatsWidget />
+
+        {/* Entity graph stats */}
+        <EntityGraphStats />
 
         {/* Bar chart */}
         <div className="bg-white/5 rounded-2xl px-4 pt-4 pb-2 border border-white/[0.06]">

@@ -2,108 +2,103 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import * as d3 from 'd3'
 import { Network, X, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import type { ExtractedKnowledge } from '../../types'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface GraphNode extends d3.SimulationNodeDatum {
-  id: string
-  count: number
-  itemIds: string[]
+interface EntityNode extends d3.SimulationNodeDatum {
+  id: string        // UUID from entity_nodes
+  name: string
+  type: string
+  count: number     // mention_count
 }
 
-type ResolvedLink = { source: GraphNode; target: GraphNode }
+interface EntityEdge {
+  source_id: string
+  target_id: string
+  weight: number
+}
 
-// ── Data builder ──────────────────────────────────────────────────────────────
+type ResolvedLink = { source: EntityNode; target: EntityNode; weight: number }
 
-function buildGraphData(items: ExtractedKnowledge[]): { nodes: GraphNode[]; rawLinks: { source: string; target: string }[] } {
-  const entityItems = new Map<string, string[]>()
-
-  for (const item of items) {
-    if (!item.entities?.length) continue
-    for (const raw of item.entities) {
-      const entity = raw.trim()
-      if (!entity) continue
-      if (!entityItems.has(entity)) entityItems.set(entity, [])
-      entityItems.get(entity)!.push(item.id)
-    }
-  }
-
-  const sorted = [...entityItems.entries()]
-    .sort((a, b) => b[1].length - a[1].length)
-    .slice(0, 60)
-
-  const nodes: GraphNode[] = sorted.map(([id, ids]) => ({ id, count: ids.length, itemIds: ids }))
-
-  const entitySet = new Set(sorted.map(([id]) => id))
-  const edgeSet = new Set<string>()
-  const rawLinks: { source: string; target: string }[] = []
-
-  for (const item of items) {
-    if (!item.entities || item.entities.length < 2) continue
-    const rel = item.entities.map(e => e.trim()).filter(e => entitySet.has(e))
-    for (let i = 0; i < rel.length; i++) {
-      for (let j = i + 1; j < rel.length; j++) {
-        const key = [rel[i], rel[j]].sort().join('\x00')
-        if (!edgeSet.has(key)) {
-          edgeSet.add(key)
-          rawLinks.push({ source: rel[i], target: rel[j] })
-        }
-      }
-    }
-  }
-
-  return { nodes, rawLinks }
+interface KnowledgeItem {
+  knowledge_id: string
+  content: string
+  source_type: string | null
+  knowledge_type: string | null
 }
 
 // ── Visual helpers ────────────────────────────────────────────────────────────
 
-const KNOWN_TOOLS = new Set(['Claude', 'Supabase', 'Vercel', 'Railway',
-  'Haiku', 'Apify', 'Whisper', 'GitHub', 'Obsidian', 'Pinecone',
-  'Sentry', 'Stripe', 'Cohere', 'OpenAI', 'Playwright', 'MCP',
-  'Telegram', 'pgvector', 'LangChain'])
-const KNOWN_PROJECTS = new Set(['MAOS', 'Pitstop', 'Life RPG', 'MAOS Brain',
-  'MAOS Intake', 'MAOS Runner'])
-const KNOWN_CONCEPTS = new Set(['RAG', 'Embeddings', 'Knowledge Base',
-  'AI Agents', 'Graph Memory'])
+const TYPE_COLOR: Record<string, string> = {
+  tool:    '#3b82f6',
+  project: '#22c55e',
+  concept: '#a855f7',
+  person:  '#f97316',
+}
 
-function entityColor(entity: string): string {
-  if (KNOWN_TOOLS.has(entity))    return '#3b82f6'
-  if (KNOWN_PROJECTS.has(entity)) return '#22c55e'
-  if (KNOWN_CONCEPTS.has(entity)) return '#a855f7'
-  if (entity.startsWith('@'))     return '#f97316'
-  return '#6b7280'
+function entityColor(type: string): string {
+  return TYPE_COLOR[type] ?? '#6b7280'
+}
+
+const TYPE_CLS: Record<string, string> = {
+  tool:    'bg-blue-900/50 text-blue-400',
+  project: 'bg-emerald-900/50 text-emerald-400',
+  concept: 'bg-purple-900/50 text-purple-400',
+  person:  'bg-orange-900/50 text-orange-400',
 }
 
 function nodeR(count: number, maxCount: number): number {
   return 8 + ((count - 1) / Math.max(maxCount - 1, 1)) * 32
 }
 
-// ── Entity type helpers ───────────────────────────────────────────────────────
+// ── Node detail panel ─────────────────────────────────────────────────────────
 
-function entityType(name: string): { label: string; cls: string } {
-  if (KNOWN_TOOLS.has(name))    return { label: 'tool',    cls: 'bg-blue-900/50 text-blue-400' }
-  if (KNOWN_PROJECTS.has(name)) return { label: 'project', cls: 'bg-emerald-900/50 text-emerald-400' }
-  if (KNOWN_CONCEPTS.has(name)) return { label: 'concept', cls: 'bg-purple-900/50 text-purple-400' }
-  if (name.startsWith('@'))     return { label: 'person',  cls: 'bg-orange-900/50 text-orange-400' }
-  return                               { label: 'entity',  cls: 'bg-slate-800 text-slate-400' }
-}
-
-// ── Node panel ────────────────────────────────────────────────────────────────
-
-function NodePanel({ node, allItems, neighbors, onClose, onSelectNode }: {
-  node: GraphNode
-  allItems: ExtractedKnowledge[]
-  neighbors: GraphNode[]
+function NodePanel({ node, neighbors, onClose, onSelectNode }: {
+  node: EntityNode
+  neighbors: EntityNode[]
   onClose: () => void
-  onSelectNode: (n: GraphNode) => void
+  onSelectNode: (n: EntityNode) => void
 }) {
+  const [knowledge, setKnowledge] = useState<KnowledgeItem[] | null>(null)
+  const [loading, setLoading] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const items = useMemo(
-    () => allItems.filter(i => node.itemIds.includes(i.id)),
-    [node, allItems],
-  )
-  const type = entityType(node.id)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setKnowledge(null)
+    setExpandedId(null)
+    supabase
+      .from('knowledge_entities')
+      .select('knowledge_id, extracted_knowledge(content, source_type, knowledge_type)')
+      .eq('entity_id', node.id)
+      .limit(10)
+      .then(({ data }) => {
+        if (cancelled) return
+        const items: KnowledgeItem[] = (data ?? []).map((row: {
+          knowledge_id: string
+          // Supabase returns joined rows as array or object depending on relation type
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          extracted_knowledge: any
+        }) => {
+          const ek = Array.isArray(row.extracted_knowledge)
+            ? row.extracted_knowledge[0]
+            : row.extracted_knowledge
+          return {
+            knowledge_id: row.knowledge_id,
+            content: ek?.content ?? '',
+            source_type: ek?.source_type ?? null,
+            knowledge_type: ek?.knowledge_type ?? null,
+          }
+        }).filter(i => i.content)
+        setKnowledge(items)
+        setLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [node.id])
+
+  const typeLabel = node.type ?? 'entity'
+  const typeCls = TYPE_CLS[node.type] ?? 'bg-slate-800 text-slate-400'
 
   return (
     <div className="fixed inset-0 z-50 flex items-end" onClick={onClose}>
@@ -119,13 +114,13 @@ function NodePanel({ node, allItems, neighbors, onClose, onSelectNode }: {
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 shrink-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="w-3 h-3 rounded-full shrink-0" style={{ background: entityColor(node.id) }} />
-            <p className="text-slate-100 font-semibold text-base">{node.id}</p>
-            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${type.cls}`}>
-              {type.label}
+            <span className="w-3 h-3 rounded-full shrink-0" style={{ background: entityColor(node.type) }} />
+            <p className="text-slate-100 font-semibold text-base">{node.name}</p>
+            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${typeCls}`}>
+              {typeLabel}
             </span>
             <span className="text-[11px] text-slate-500 px-2 py-0.5 bg-white/5 rounded-full">
-              {node.count} {node.count === 1 ? 'знание' : node.count < 5 ? 'знания' : 'знаний'}
+              {node.count} упом.
             </span>
           </div>
           <button onClick={onClose} className="text-slate-500 active:text-slate-300 shrink-0">
@@ -138,7 +133,7 @@ function NodePanel({ node, allItems, neighbors, onClose, onSelectNode }: {
           {neighbors.length > 0 && (
             <div>
               <p className="text-[10px] text-slate-500 uppercase tracking-wider font-medium mb-2">
-                Связанные entity ({neighbors.length})
+                Связанные ({neighbors.length})
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {neighbors.map(n => (
@@ -147,8 +142,8 @@ function NodePanel({ node, allItems, neighbors, onClose, onSelectNode }: {
                     onClick={() => onSelectNode(n)}
                     className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-white/5 border border-white/[0.06] text-slate-300 active:bg-white/10 transition-colors"
                   >
-                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: entityColor(n.id) }} />
-                    {n.id}
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: entityColor(n.type) }} />
+                    {n.name}
                     <span className="text-[9px] text-slate-600">{n.count}</span>
                   </button>
                 ))}
@@ -156,39 +151,36 @@ function NodePanel({ node, allItems, neighbors, onClose, onSelectNode }: {
             </div>
           )}
 
-          {/* Knowledge items */}
+          {/* Knowledge */}
           <div>
-            <p className="text-[10px] text-slate-500 uppercase tracking-wider font-medium mb-2">
-              Знания
-            </p>
-            <div className="space-y-2">
-              {items.map(item => {
-                const isExpanded = expandedId === item.id
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => setExpandedId(isExpanded ? null : item.id)}
-                    className="w-full text-left bg-white/[0.04] rounded-xl px-3 py-2.5 border border-white/[0.06] space-y-1.5 active:bg-white/[0.07] transition-colors"
-                  >
-                    <p className={`text-sm text-slate-200 leading-relaxed ${isExpanded ? '' : 'line-clamp-2'}`}>
-                      {item.content}
-                    </p>
-                    <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-[10px] text-slate-500 uppercase tracking-wider font-medium mb-2">Знания</p>
+            {loading && <p className="text-xs text-slate-600">Загрузка...</p>}
+            {!loading && knowledge?.length === 0 && (
+              <p className="text-xs text-slate-600 italic">Знаний не найдено</p>
+            )}
+            {!loading && knowledge && knowledge.length > 0 && (
+              <div className="space-y-2">
+                {knowledge.map(item => {
+                  const isExpanded = expandedId === item.knowledge_id
+                  return (
+                    <button
+                      key={item.knowledge_id}
+                      onClick={() => setExpandedId(isExpanded ? null : item.knowledge_id)}
+                      className="w-full text-left bg-white/[0.04] rounded-xl px-3 py-2.5 border border-white/[0.06] space-y-1.5 active:bg-white/[0.07] transition-colors"
+                    >
+                      <p className={`text-sm text-slate-200 leading-relaxed ${isExpanded ? '' : 'line-clamp-2'}`}>
+                        {item.content}
+                      </p>
                       {item.knowledge_type && (
                         <span className="text-[10px] text-purple-400 bg-purple-900/40 px-1.5 py-0.5 rounded-full">
                           {item.knowledge_type}
                         </span>
                       )}
-                      {item.business_value && (
-                        <span className="text-[10px] text-slate-500 line-clamp-1 flex-1">
-                          🎯 {item.business_value}
-                        </span>
-                      )}
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -201,69 +193,80 @@ function NodePanel({ node, allItems, neighbors, onClose, onSelectNode }: {
 const GRAPH_H = 540
 
 export default function GraphPage() {
-  const [rawItems, setRawItems] = useState<ExtractedKnowledge[]>([])
+  const [nodes, setNodes] = useState<EntityNode[]>([])
+  const [edges, setEdges] = useState<EntityEdge[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null)
+  const [selectedNode, setSelectedNode] = useState<EntityNode | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
 
   const containerRef = useRef<HTMLDivElement>(null)
-  // Stored inside D3 effect closure; updated each rebuild
-  const highlightRef = useRef<(q: string) => void>(() => { /* noop until graph built */ })
+  const highlightRef = useRef<(q: string) => void>(() => { /* noop */ })
+
+  // ── Fetch data from SQL tables ───────────────────────────────────────────────
 
   useEffect(() => {
-    supabase
-      .from('extracted_knowledge')
-      .select('id, content, knowledge_type, entities')
-      .not('entities', 'eq', '{}')
-      .then(({ data }) => {
-        setRawItems((data as ExtractedKnowledge[]) ?? [])
-        setLoading(false)
-      })
+    let cancelled = false
+    Promise.all([
+      supabase
+        .from('entity_nodes')
+        .select('id, name, type, mention_count')
+        .gte('mention_count', 2)
+        .order('mention_count', { ascending: false })
+        .limit(80),
+      supabase
+        .from('entity_edges')
+        .select('source_id, target_id, weight')
+        .gte('weight', 1),
+    ]).then(([nodesRes, edgesRes]) => {
+      if (cancelled) return
+      setNodes((nodesRes.data ?? []).map(r => ({
+        id: r.id,
+        name: r.name,
+        type: r.type ?? 'unknown',
+        count: r.mention_count ?? 1,
+      })))
+      setEdges(edgesRes.data ?? [])
+      setLoading(false)
+    })
+    return () => { cancelled = true }
   }, [])
 
-  const { nodes: graphNodes, rawLinks } = useMemo(
-    () => rawItems.length ? buildGraphData(rawItems) : { nodes: [] as GraphNode[], rawLinks: [] as { source: string; target: string }[] },
-    [rawItems],
-  )
-
   const maxCount = useMemo(
-    () => graphNodes.length > 0 ? Math.max(...graphNodes.map(n => n.count)) : 1,
-    [graphNodes],
+    () => nodes.length > 0 ? Math.max(...nodes.map(n => n.count)) : 1,
+    [nodes],
   )
 
   const nodeById = useMemo(
-    () => new Map(graphNodes.map(n => [n.id, n])),
-    [graphNodes],
+    () => new Map(nodes.map(n => [n.id, n])),
+    [nodes],
   )
 
-  // Precompute adjacency: entity id → neighbour ids
   const adjacency = useMemo(() => {
     const adj = new Map<string, Set<string>>()
-    for (const { source, target } of rawLinks) {
-      if (!adj.has(source)) adj.set(source, new Set())
-      if (!adj.has(target)) adj.set(target, new Set())
-      adj.get(source)!.add(target)
-      adj.get(target)!.add(source)
+    for (const e of edges) {
+      if (!adj.has(e.source_id)) adj.set(e.source_id, new Set())
+      if (!adj.has(e.target_id)) adj.set(e.target_id, new Set())
+      adj.get(e.source_id)!.add(e.target_id)
+      adj.get(e.target_id)!.add(e.source_id)
     }
     return adj
-  }, [rawLinks])
+  }, [edges])
 
   const selectedNeighbors = useMemo(() => {
     if (!selectedNode) return []
     const ids = adjacency.get(selectedNode.id) ?? new Set<string>()
-    return [...ids].map(id => nodeById.get(id)).filter((n): n is GraphNode => !!n)
+    return [...ids].map(id => nodeById.get(id)).filter((n): n is EntityNode => !!n)
   }, [selectedNode, adjacency, nodeById])
 
-  // ── D3 visualization ────────────────────────────────────────────────────────
+  // ── D3 visualization ─────────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!containerRef.current || graphNodes.length === 0) return
+    if (!containerRef.current || nodes.length === 0) return
 
     const container = containerRef.current
     const W = container.clientWidth || 375
     const H = GRAPH_H
 
-    // Clear previous render
     d3.select(container).selectAll('*').remove()
 
     const svg = d3.select(container)
@@ -275,59 +278,55 @@ export default function GraphPage() {
 
     const g = svg.append('g')
 
-    // Zoom
     const zoom = d3.zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.1, 5])
       .on('zoom', e => g.attr('transform', e.transform.toString()))
-
     svg.call(zoom)
 
-    // Build simulation copies (D3 mutates x/y on nodes)
-    const total = graphNodes.length
-    const simNodes: GraphNode[] = graphNodes.map((n, i) => ({
+    const total = nodes.length
+    const simNodes: EntityNode[] = nodes.map((n, i) => ({
       ...n,
-      x: W / 2 + Math.cos((i * 2 * Math.PI) / total) * 180,
-      y: H / 2 + Math.sin((i * 2 * Math.PI) / total) * 180,
+      x: W / 2 + Math.cos((i * 2 * Math.PI) / total) * 160,
+      y: H / 2 + Math.sin((i * 2 * Math.PI) / total) * 160,
     }))
 
-    const nodeById = new Map(simNodes.map(n => [n.id, n]))
+    const simNodeById = new Map(simNodes.map(n => [n.id, n]))
 
-    const simLinks: ResolvedLink[] = rawLinks
-      .map(l => ({ source: nodeById.get(l.source)!, target: nodeById.get(l.target)! }))
-      .filter((l): l is ResolvedLink => !!(l.source && l.target))
+    const simLinks: ResolvedLink[] = edges
+      .map(e => {
+        const src = simNodeById.get(e.source_id)
+        const tgt = simNodeById.get(e.target_id)
+        if (!src || !tgt) return null
+        return { source: src, target: tgt, weight: e.weight }
+      })
+      .filter((l): l is ResolvedLink => l !== null)
 
-    // Simulation
-    const simulation = d3.forceSimulation<GraphNode>(simNodes)
-      .force('link', d3.forceLink<GraphNode, ResolvedLink>(simLinks).id(d => d.id).distance(50).strength(0.8))
-      .force('charge', d3.forceManyBody<GraphNode>().strength(-30))
+    const simulation = d3.forceSimulation<EntityNode>(simNodes)
+      .force('link', d3.forceLink<EntityNode, ResolvedLink>(simLinks).id(d => d.id).distance(50).strength(0.8))
+      .force('charge', d3.forceManyBody<EntityNode>().strength(-30))
       .force('center', d3.forceCenter(W / 2, H / 2).strength(0.4))
-      .force('collision', d3.forceCollide<GraphNode>().radius(d => nodeR(d.count, maxCount) + 6))
+      .force('collision', d3.forceCollide<EntityNode>().radius(d => nodeR(d.count, maxCount) + 5))
 
-    // Drag
-    const drag = d3.drag<SVGGElement, GraphNode>()
+    const drag = d3.drag<SVGGElement, EntityNode>()
       .on('start', (event, d) => {
         if (!event.active) simulation.alphaTarget(0.3).restart()
         d.fx = d.x; d.fy = d.y
       })
-      .on('drag', (event, d) => {
-        d.fx = event.x; d.fy = event.y
-      })
+      .on('drag', (event, d) => { d.fx = event.x; d.fy = event.y })
       .on('end', (event, d) => {
         if (!event.active) simulation.alphaTarget(0)
         d.fx = null; d.fy = null
       })
 
-    // Edges
     const link = g.append('g')
       .selectAll<SVGLineElement, ResolvedLink>('line')
       .data(simLinks)
       .join('line')
       .attr('stroke', 'rgba(255,255,255,0.07)')
-      .attr('stroke-width', 1)
+      .attr('stroke-width', l => Math.min(3, 0.5 + l.weight * 0.3))
 
-    // Node groups
     const node = g.append('g')
-      .selectAll<SVGGElement, GraphNode>('g')
+      .selectAll<SVGGElement, EntityNode>('g')
       .data(simNodes)
       .join('g')
       .style('cursor', 'pointer')
@@ -335,22 +334,22 @@ export default function GraphPage() {
 
     node.append('circle')
       .attr('r', d => nodeR(d.count, maxCount))
-      .attr('fill', d => entityColor(d.id))
+      .attr('fill', d => entityColor(d.type))
       .attr('fill-opacity', 0.7)
-      .attr('stroke', d => entityColor(d.id))
+      .attr('stroke', d => entityColor(d.type))
       .attr('stroke-width', 1.5)
 
-    // Labels always visible, size scales with node
-    node.append('text')
-      .text(d => d.id.length > 16 ? d.id.slice(0, 15) + '…' : d.id)
+    // Labels for nodes with count >= 3
+    node.filter(d => d.count >= 3)
+      .append('text')
+      .text(d => d.name.length > 16 ? d.name.slice(0, 15) + '…' : d.name)
       .attr('text-anchor', 'middle')
       .attr('dy', d => nodeR(d.count, maxCount) + 12)
-      .attr('font-size', d => Math.round(10 + ((d.count - 1) / Math.max(maxCount - 1, 1)) * 4))
+      .attr('font-size', d => Math.round(9 + ((d.count - 1) / Math.max(maxCount - 1, 1)) * 3))
       .attr('fill', 'rgba(255,255,255,0.65)')
       .style('pointer-events', 'none')
       .style('user-select', 'none')
 
-    // Hover — highlight connected
     node
       .on('pointerenter', function(_, hovered) {
         const connected = new Set([
@@ -363,19 +362,19 @@ export default function GraphPage() {
           .attr('stroke-opacity', n => connected.has(n.id) ? 1 : 0.1)
         link
           .attr('stroke', l => l.source.id === hovered.id || l.target.id === hovered.id
-            ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.03)')
+            ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.02)')
           .attr('stroke-width', l => l.source.id === hovered.id || l.target.id === hovered.id ? 2 : 1)
       })
       .on('pointerleave', function() {
         node.select('circle').attr('fill-opacity', 0.7).attr('stroke-opacity', 1)
-        link.attr('stroke', 'rgba(255,255,255,0.07)').attr('stroke-width', 1)
+        link.attr('stroke', 'rgba(255,255,255,0.07)')
+          .attr('stroke-width', l => Math.min(3, 0.5 + l.weight * 0.3))
       })
       .on('click', (event, d) => {
         event.stopPropagation()
         setSelectedNode(d)
       })
 
-    // Tick
     simulation.on('tick', () => {
       link
         .attr('x1', d => d.source.x ?? 0).attr('y1', d => d.source.y ?? 0)
@@ -383,37 +382,29 @@ export default function GraphPage() {
       node.attr('transform', d => `translate(${d.x ?? 0},${d.y ?? 0})`)
     })
 
-    // Search highlight + camera — stored in ref so React search input can call it
     highlightRef.current = (query: string) => {
       if (!query.trim()) {
-        node.select('circle')
-          .attr('fill-opacity', 0.7)
-          .attr('stroke', d => entityColor(d.id))
-          .attr('stroke-width', 1.5)
+        node.select('circle').attr('fill-opacity', 0.7).attr('stroke', d => entityColor(d.type)).attr('stroke-width', 1.5)
         return
       }
       const q = query.toLowerCase()
       node.select('circle')
-        .attr('fill-opacity', d => d.id.toLowerCase().includes(q) ? 1 : 0.1)
-        .attr('stroke', d => d.id.toLowerCase().includes(q) ? 'white' : entityColor(d.id))
-        .attr('stroke-width', d => d.id.toLowerCase().includes(q) ? 3 : 1)
-
-      const found = simNodes.find(n => n.id.toLowerCase().includes(q))
+        .attr('fill-opacity', d => d.name.toLowerCase().includes(q) ? 1 : 0.1)
+        .attr('stroke', d => d.name.toLowerCase().includes(q) ? 'white' : entityColor(d.type))
+        .attr('stroke-width', d => d.name.toLowerCase().includes(q) ? 3 : 1)
+      const found = simNodes.find(n => n.name.toLowerCase().includes(q))
       if (found?.x != null && found?.y != null) {
         const cW = (container.querySelector('svg') as SVGSVGElement | null)?.clientWidth ?? W
-        const target = d3.zoomIdentity
-          .translate(cW / 2, H / 2)
-          .scale(2)
-          .translate(-found.x, -found.y)
+        const target = d3.zoomIdentity.translate(cW / 2, H / 2).scale(2).translate(-found.x, -found.y)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ;(svg.transition().duration(500) as any).call(zoom.transform, target)
       }
     }
 
     return () => { simulation.stop() }
-  }, [graphNodes, rawLinks, maxCount])
+  }, [nodes, edges, maxCount])
 
-  // ── Render ──────────────────────────────────────────────────────────────────
+  // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
     <div className="flex flex-col min-h-full pb-4">
@@ -422,26 +413,23 @@ export default function GraphPage() {
         <div className="flex items-center gap-2">
           <Network size={20} className="text-purple-400 shrink-0" strokeWidth={1.75} />
           <h1 className="text-2xl font-bold text-slate-100">Graph</h1>
-          {!loading && graphNodes.length > 0 && (
+          {!loading && nodes.length > 0 && (
             <span className="text-xs text-slate-500 ml-1">
-              {graphNodes.length} entities · {rawLinks.length} edges
+              {nodes.length} entities · {edges.length} edges
             </span>
           )}
         </div>
       </div>
 
       {/* Search */}
-      {!loading && graphNodes.length > 0 && (
+      {!loading && nodes.length > 0 && (
         <div className="px-4 pb-3">
           <div className="relative">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
             <input
               type="text"
               value={searchQuery}
-              onChange={e => {
-                setSearchQuery(e.target.value)
-                highlightRef.current(e.target.value)
-              }}
+              onChange={e => { setSearchQuery(e.target.value); highlightRef.current(e.target.value) }}
               placeholder="Найти entity..."
               className="w-full bg-white/5 border border-white/[0.06] rounded-xl pl-8 pr-8 py-2 text-sm text-slate-100 placeholder-slate-600 outline-none focus:border-purple-500/50 transition-colors"
             />
@@ -463,45 +451,42 @@ export default function GraphPage() {
         </div>
       )}
 
-      {!loading && graphNodes.length === 0 && (
+      {!loading && nodes.length === 0 && (
         <div className="flex flex-col items-center justify-center flex-1 py-20 space-y-2">
           <p className="text-3xl">🕸</p>
-          <p className="text-sm text-slate-500">Нет entities в базе знаний</p>
-          <p className="text-xs text-slate-600">Поле entities не заполнено</p>
+          <p className="text-sm text-slate-500">Таблица entity_nodes пуста</p>
+          <p className="text-xs text-slate-600">Запусти /build_graph чтобы заполнить</p>
         </div>
       )}
 
-      {/* D3 mounts here */}
+      {/* D3 canvas */}
       <div ref={containerRef} className="w-full" />
 
-      {!loading && graphNodes.length > 0 && (
-        <p className="text-center text-xs text-slate-600 pt-1 pb-2">
-          Drag · pinch to zoom · tap for details
-        </p>
-      )}
-
-      {/* Color legend */}
-      {!loading && graphNodes.length > 0 && (
-        <div className="px-4 pb-2 flex flex-wrap gap-3 justify-center">
-          {[
-            { color: '#3b82f6', label: 'Инструменты' },
-            { color: '#22c55e', label: 'Проекты' },
-            { color: '#a855f7', label: 'Концепции' },
-            { color: '#f97316', label: 'Люди / @' },
-            { color: '#6b7280', label: 'Прочее' },
-          ].map(({ color, label }) => (
-            <span key={label} className="flex items-center gap-1.5 text-[10px] text-slate-500">
-              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
-              {label}
-            </span>
-          ))}
-        </div>
+      {!loading && nodes.length > 0 && (
+        <>
+          <p className="text-center text-xs text-slate-600 pt-1 pb-2">
+            Drag · pinch to zoom · tap for details
+          </p>
+          <div className="px-4 pb-2 flex flex-wrap gap-3 justify-center">
+            {[
+              { color: '#3b82f6', label: 'tool' },
+              { color: '#22c55e', label: 'project' },
+              { color: '#a855f7', label: 'concept' },
+              { color: '#f97316', label: 'person' },
+              { color: '#6b7280', label: 'other' },
+            ].map(({ color, label }) => (
+              <span key={label} className="flex items-center gap-1.5 text-[10px] text-slate-500">
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
+                {label}
+              </span>
+            ))}
+          </div>
+        </>
       )}
 
       {selectedNode && (
         <NodePanel
           node={selectedNode}
-          allItems={rawItems}
           neighbors={selectedNeighbors}
           onClose={() => setSelectedNode(null)}
           onSelectNode={n => setSelectedNode(n)}
