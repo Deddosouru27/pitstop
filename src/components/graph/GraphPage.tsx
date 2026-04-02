@@ -1,32 +1,26 @@
-import { useState, useEffect, useMemo } from 'react'
-import { Network, X } from 'lucide-react'
+import { useState, useEffect, useRef, useMemo } from 'react'
+import * as d3 from 'd3'
+import { Network, X, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import type { ExtractedKnowledge } from '../../types'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface GraphNode {
+interface GraphNode extends d3.SimulationNodeDatum {
   id: string
-  x: number
-  y: number
-  vx: number
-  vy: number
   count: number
   itemIds: string[]
 }
 
-interface GraphEdge {
-  source: string
-  target: string
-}
+type ResolvedLink = { source: GraphNode; target: GraphNode }
 
-// ── Force simulation ──────────────────────────────────────────────────────────
+// ── Data builder ──────────────────────────────────────────────────────────────
 
-function buildGraph(items: ExtractedKnowledge[], W: number, H: number) {
+function buildGraphData(items: ExtractedKnowledge[]): { nodes: GraphNode[]; rawLinks: { source: string; target: string }[] } {
   const entityItems = new Map<string, string[]>()
 
   for (const item of items) {
-    if (!item.entities || item.entities.length === 0) continue
+    if (!item.entities?.length) continue
     for (const raw of item.entities) {
       const entity = raw.trim()
       if (!entity) continue
@@ -35,125 +29,60 @@ function buildGraph(items: ExtractedKnowledge[], W: number, H: number) {
     }
   }
 
-  // Top 60 by mention count
   const sorted = [...entityItems.entries()]
     .sort((a, b) => b[1].length - a[1].length)
     .slice(0, 60)
 
-  const cx = W / 2, cy = H / 2
-  const total = sorted.length
-
-  const nodes: GraphNode[] = sorted.map(([id, ids], i) => ({
-    id,
-    x: cx + Math.cos((i * 2 * Math.PI) / total) * 200,
-    y: cy + Math.sin((i * 2 * Math.PI) / total) * 200,
-    vx: 0, vy: 0,
-    count: ids.length,
-    itemIds: ids,
-  }))
+  const nodes: GraphNode[] = sorted.map(([id, ids]) => ({ id, count: ids.length, itemIds: ids }))
 
   const entitySet = new Set(sorted.map(([id]) => id))
   const edgeSet = new Set<string>()
-  const edges: GraphEdge[] = []
+  const rawLinks: { source: string; target: string }[] = []
 
   for (const item of items) {
     if (!item.entities || item.entities.length < 2) continue
-    const relevant = item.entities.map(e => e.trim()).filter(e => entitySet.has(e))
-    for (let i = 0; i < relevant.length; i++) {
-      for (let j = i + 1; j < relevant.length; j++) {
-        const key = [relevant[i], relevant[j]].sort().join('\x00')
+    const rel = item.entities.map(e => e.trim()).filter(e => entitySet.has(e))
+    for (let i = 0; i < rel.length; i++) {
+      for (let j = i + 1; j < rel.length; j++) {
+        const key = [rel[i], rel[j]].sort().join('\x00')
         if (!edgeSet.has(key)) {
           edgeSet.add(key)
-          edges.push({ source: relevant[i], target: relevant[j] })
+          rawLinks.push({ source: rel[i], target: rel[j] })
         }
       }
     }
   }
 
-  const nodeMap = new Map<string, GraphNode>(nodes.map(n => [n.id, n]))
-
-  for (let iter = 0; iter < 180; iter++) {
-    const alpha = 1 - iter / 180
-
-    // Repulsion
-    for (let i = 0; i < nodes.length; i++) {
-      for (let j = i + 1; j < nodes.length; j++) {
-        const a = nodes[i], b = nodes[j]
-        const dx = b.x - a.x || 0.01
-        const dy = b.y - a.y || 0.01
-        const distSq = Math.max(1, dx * dx + dy * dy)
-        const dist = Math.sqrt(distSq)
-        const force = (5000 / distSq) * alpha
-        const fx = (dx / dist) * force
-        const fy = (dy / dist) * force
-        a.vx -= fx; a.vy -= fy
-        b.vx += fx; b.vy += fy
-      }
-    }
-
-    // Edge attraction
-    for (const edge of edges) {
-      const a = nodeMap.get(edge.source)
-      const b = nodeMap.get(edge.target)
-      if (!a || !b) continue
-      const dx = b.x - a.x
-      const dy = b.y - a.y
-      const dist = Math.sqrt(dx * dx + dy * dy) || 1
-      const ideal = 90
-      const force = (dist - ideal) * 0.03 * alpha
-      const fx = (dx / dist) * force
-      const fy = (dy / dist) * force
-      a.vx += fx; a.vy += fy
-      b.vx -= fx; b.vy -= fy
-    }
-
-    // Center gravity
-    for (const n of nodes) {
-      n.vx += (cx - n.x) * 0.012 * alpha
-      n.vy += (cy - n.y) * 0.012 * alpha
-    }
-
-    // Integrate + dampen
-    for (const n of nodes) {
-      n.x += n.vx
-      n.y += n.vy
-      n.vx *= 0.78
-      n.vy *= 0.78
-      n.x = Math.max(24, Math.min(W - 24, n.x))
-      n.y = Math.max(24, Math.min(H - 24, n.y))
-    }
-  }
-
-  return { nodes, edges }
+  return { nodes, rawLinks }
 }
+
+// ── Visual helpers ────────────────────────────────────────────────────────────
 
 function entityColor(entity: string): string {
-  let h = 0
-  for (let i = 0; i < entity.length; i++) {
-    h = ((h * 31) + entity.charCodeAt(i)) & 0x3fffffff
-  }
-  const hue = h % 360
-  return `hsl(${hue}, 55%, 55%)`
+  if (entity.startsWith('@')) return 'hsl(30, 80%, 60%)'
+  const palette = [
+    'hsl(210, 70%, 60%)', // blue — tools
+    'hsl(145, 58%, 52%)', // green — projects
+    'hsl(265, 62%, 62%)', // purple — concepts
+    'hsl(30, 78%, 58%)',  // orange — people
+  ]
+  return palette[entity.charCodeAt(0) % 4]
 }
 
-function nodeRadius(count: number, maxCount: number): number {
-  return 6 + ((count - 1) / Math.max(maxCount - 1, 1)) * 16
+function nodeR(count: number, maxCount: number): number {
+  return 7 + ((count - 1) / Math.max(maxCount - 1, 1)) * 16
 }
 
-// ── Selected node panel ───────────────────────────────────────────────────────
+// ── Node panel ────────────────────────────────────────────────────────────────
 
-function NodePanel({
-  node,
-  allItems,
-  onClose,
-}: {
+function NodePanel({ node, allItems, onClose }: {
   node: GraphNode
   allItems: ExtractedKnowledge[]
   onClose: () => void
 }) {
   const items = useMemo(
     () => allItems.filter(i => node.itemIds.includes(i.id)),
-    [node, allItems]
+    [node, allItems],
   )
   return (
     <div className="fixed inset-0 z-50 flex items-end" onClick={onClose}>
@@ -167,10 +96,7 @@ function NodePanel({
         </div>
         <div className="flex items-center justify-between px-5 py-3 shrink-0">
           <div className="flex items-center gap-2">
-            <span
-              className="w-2.5 h-2.5 rounded-full shrink-0"
-              style={{ background: entityColor(node.id) }}
-            />
+            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: entityColor(node.id) }} />
             <p className="text-slate-100 font-semibold text-sm">{node.id}</p>
             <span className="text-[11px] text-slate-500 px-2 py-0.5 bg-white/5 rounded-full">
               {node.count} {node.count === 1 ? 'знание' : node.count < 5 ? 'знания' : 'знаний'}
@@ -182,10 +108,7 @@ function NodePanel({
         </div>
         <div className="flex-1 overflow-y-auto px-5 pb-8 space-y-2">
           {items.map(item => (
-            <div
-              key={item.id}
-              className="bg-white/[0.04] rounded-xl px-3 py-2.5 border border-white/[0.06] space-y-1"
-            >
+            <div key={item.id} className="bg-white/[0.04] rounded-xl px-3 py-2.5 border border-white/[0.06] space-y-1">
               <p className="text-sm text-slate-200 leading-relaxed line-clamp-3">{item.content}</p>
               {item.knowledge_type && (
                 <span className="text-[10px] text-purple-400 bg-purple-900/40 px-1.5 py-0.5 rounded-full">
@@ -202,10 +125,17 @@ function NodePanel({
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+const GRAPH_H = 540
+
 export default function GraphPage() {
   const [rawItems, setRawItems] = useState<ExtractedKnowledge[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+
+  const containerRef = useRef<HTMLDivElement>(null)
+  // Stored inside D3 effect closure; updated each rebuild
+  const highlightRef = useRef<(q: string) => void>(() => { /* noop until graph built */ })
 
   useEffect(() => {
     supabase
@@ -218,38 +148,218 @@ export default function GraphPage() {
       })
   }, [])
 
-  const { nodes, edges } = useMemo(() => {
-    if (!rawItems.length) return { nodes: [] as GraphNode[], edges: [] as GraphEdge[] }
-    return buildGraph(rawItems, 600, 600)
-  }, [rawItems])
-
-  const nodeMap = useMemo(
-    () => new Map<string, GraphNode>(nodes.map(n => [n.id, n])),
-    [nodes]
+  const { nodes: graphNodes, rawLinks } = useMemo(
+    () => rawItems.length ? buildGraphData(rawItems) : { nodes: [] as GraphNode[], rawLinks: [] as { source: string; target: string }[] },
+    [rawItems],
   )
 
-  const maxCount = nodes.length > 0 ? Math.max(...nodes.map(n => n.count)) : 1
+  const maxCount = useMemo(
+    () => graphNodes.length > 0 ? Math.max(...graphNodes.map(n => n.count)) : 1,
+    [graphNodes],
+  )
 
-  const padding = 32
-  const minX = nodes.length > 0 ? Math.min(...nodes.map(n => n.x)) - padding : 0
-  const minY = nodes.length > 0 ? Math.min(...nodes.map(n => n.y)) - padding : 0
-  const maxX = nodes.length > 0 ? Math.max(...nodes.map(n => n.x)) + padding : 600
-  const maxY = nodes.length > 0 ? Math.max(...nodes.map(n => n.y)) + padding : 600
+  // ── D3 visualization ────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (!containerRef.current || graphNodes.length === 0) return
+
+    const container = containerRef.current
+    const W = container.clientWidth || 375
+    const H = GRAPH_H
+
+    // Clear previous render
+    d3.select(container).selectAll('*').remove()
+
+    const svg = d3.select(container)
+      .append('svg')
+      .attr('width', '100%')
+      .attr('height', H)
+      .style('touch-action', 'none')
+      .style('background', 'transparent') as d3.Selection<SVGSVGElement, unknown, null, undefined>
+
+    const g = svg.append('g')
+
+    // Zoom
+    const zoom = d3.zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.1, 5])
+      .on('zoom', e => g.attr('transform', e.transform.toString()))
+
+    svg.call(zoom)
+
+    // Build simulation copies (D3 mutates x/y on nodes)
+    const total = graphNodes.length
+    const simNodes: GraphNode[] = graphNodes.map((n, i) => ({
+      ...n,
+      x: W / 2 + Math.cos((i * 2 * Math.PI) / total) * 180,
+      y: H / 2 + Math.sin((i * 2 * Math.PI) / total) * 180,
+    }))
+
+    const nodeById = new Map(simNodes.map(n => [n.id, n]))
+
+    const simLinks: ResolvedLink[] = rawLinks
+      .map(l => ({ source: nodeById.get(l.source)!, target: nodeById.get(l.target)! }))
+      .filter((l): l is ResolvedLink => !!(l.source && l.target))
+
+    // Simulation
+    const simulation = d3.forceSimulation<GraphNode>(simNodes)
+      .force('link', d3.forceLink<GraphNode, ResolvedLink>(simLinks).id(d => d.id).distance(80).strength(0.5))
+      .force('charge', d3.forceManyBody<GraphNode>().strength(-280))
+      .force('center', d3.forceCenter(W / 2, H / 2))
+      .force('collision', d3.forceCollide<GraphNode>().radius(d => nodeR(d.count, maxCount) + 8))
+
+    // Drag
+    const drag = d3.drag<SVGGElement, GraphNode>()
+      .on('start', (event, d) => {
+        if (!event.active) simulation.alphaTarget(0.3).restart()
+        d.fx = d.x; d.fy = d.y
+      })
+      .on('drag', (event, d) => {
+        d.fx = event.x; d.fy = event.y
+      })
+      .on('end', (event, d) => {
+        if (!event.active) simulation.alphaTarget(0)
+        d.fx = null; d.fy = null
+      })
+
+    // Edges
+    const link = g.append('g')
+      .selectAll<SVGLineElement, ResolvedLink>('line')
+      .data(simLinks)
+      .join('line')
+      .attr('stroke', 'rgba(255,255,255,0.07)')
+      .attr('stroke-width', 1)
+
+    // Node groups
+    const node = g.append('g')
+      .selectAll<SVGGElement, GraphNode>('g')
+      .data(simNodes)
+      .join('g')
+      .style('cursor', 'pointer')
+      .call(drag)
+
+    node.append('circle')
+      .attr('r', d => nodeR(d.count, maxCount))
+      .attr('fill', d => entityColor(d.id))
+      .attr('fill-opacity', 0.7)
+      .attr('stroke', d => entityColor(d.id))
+      .attr('stroke-width', 1.5)
+
+    // Labels always visible
+    node.append('text')
+      .text(d => d.id.length > 16 ? d.id.slice(0, 15) + '…' : d.id)
+      .attr('text-anchor', 'middle')
+      .attr('dy', d => nodeR(d.count, maxCount) + 11)
+      .attr('font-size', 9)
+      .attr('fill', 'rgba(255,255,255,0.55)')
+      .style('pointer-events', 'none')
+      .style('user-select', 'none')
+
+    // Hover — highlight connected
+    node
+      .on('pointerenter', function(_, hovered) {
+        const connected = new Set([
+          hovered.id,
+          ...simLinks.filter(l => l.source.id === hovered.id || l.target.id === hovered.id)
+            .flatMap(l => [l.source.id, l.target.id]),
+        ])
+        node.select('circle')
+          .attr('fill-opacity', n => connected.has(n.id) ? 1 : 0.1)
+          .attr('stroke-opacity', n => connected.has(n.id) ? 1 : 0.1)
+        link
+          .attr('stroke', l => l.source.id === hovered.id || l.target.id === hovered.id
+            ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.03)')
+          .attr('stroke-width', l => l.source.id === hovered.id || l.target.id === hovered.id ? 2 : 1)
+      })
+      .on('pointerleave', function() {
+        node.select('circle').attr('fill-opacity', 0.7).attr('stroke-opacity', 1)
+        link.attr('stroke', 'rgba(255,255,255,0.07)').attr('stroke-width', 1)
+      })
+      .on('click', (event, d) => {
+        event.stopPropagation()
+        setSelectedNode(d)
+      })
+
+    // Tick
+    simulation.on('tick', () => {
+      link
+        .attr('x1', d => d.source.x ?? 0).attr('y1', d => d.source.y ?? 0)
+        .attr('x2', d => d.target.x ?? 0).attr('y2', d => d.target.y ?? 0)
+      node.attr('transform', d => `translate(${d.x ?? 0},${d.y ?? 0})`)
+    })
+
+    // Search highlight + camera — stored in ref so React search input can call it
+    highlightRef.current = (query: string) => {
+      if (!query.trim()) {
+        node.select('circle')
+          .attr('fill-opacity', 0.7)
+          .attr('stroke', d => entityColor(d.id))
+          .attr('stroke-width', 1.5)
+        return
+      }
+      const q = query.toLowerCase()
+      node.select('circle')
+        .attr('fill-opacity', d => d.id.toLowerCase().includes(q) ? 1 : 0.1)
+        .attr('stroke', d => d.id.toLowerCase().includes(q) ? 'white' : entityColor(d.id))
+        .attr('stroke-width', d => d.id.toLowerCase().includes(q) ? 3 : 1)
+
+      const found = simNodes.find(n => n.id.toLowerCase().includes(q))
+      if (found?.x != null && found?.y != null) {
+        const cW = (container.querySelector('svg') as SVGSVGElement | null)?.clientWidth ?? W
+        const target = d3.zoomIdentity
+          .translate(cW / 2, H / 2)
+          .scale(2)
+          .translate(-found.x, -found.y)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ;(svg.transition().duration(500) as any).call(zoom.transform, target)
+      }
+    }
+
+    return () => { simulation.stop() }
+  }, [graphNodes, rawLinks, maxCount])
+
+  // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
     <div className="flex flex-col min-h-full pb-4">
+      {/* Header */}
       <div className="px-4 pt-6 pb-3">
         <div className="flex items-center gap-2">
           <Network size={20} className="text-purple-400 shrink-0" strokeWidth={1.75} />
           <h1 className="text-2xl font-bold text-slate-100">Graph</h1>
-          {!loading && (
+          {!loading && graphNodes.length > 0 && (
             <span className="text-xs text-slate-500 ml-1">
-              {nodes.length} entities · {edges.length} рёбер
+              {graphNodes.length} entities · {rawLinks.length} edges
             </span>
           )}
         </div>
-        <p className="text-xs text-slate-600 mt-0.5">Entity graph из базы знаний</p>
       </div>
+
+      {/* Search */}
+      {!loading && graphNodes.length > 0 && (
+        <div className="px-4 pb-3">
+          <div className="relative">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => {
+                setSearchQuery(e.target.value)
+                highlightRef.current(e.target.value)
+              }}
+              placeholder="Найти entity..."
+              className="w-full bg-white/5 border border-white/[0.06] rounded-xl pl-8 pr-8 py-2 text-sm text-slate-100 placeholder-slate-600 outline-none focus:border-purple-500/50 transition-colors"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => { setSearchQuery(''); highlightRef.current('') }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 active:text-slate-300"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {loading && (
         <div className="flex items-center justify-center flex-1 py-20 text-slate-500 text-sm">
@@ -257,7 +367,7 @@ export default function GraphPage() {
         </div>
       )}
 
-      {!loading && nodes.length === 0 && (
+      {!loading && graphNodes.length === 0 && (
         <div className="flex flex-col items-center justify-center flex-1 py-20 space-y-2">
           <p className="text-3xl">🕸</p>
           <p className="text-sm text-slate-500">Нет entities в базе знаний</p>
@@ -265,77 +375,34 @@ export default function GraphPage() {
         </div>
       )}
 
-      {!loading && nodes.length > 0 && (
-        <div className="px-2 flex-1">
-          <svg
-            viewBox={`${minX} ${minY} ${maxX - minX} ${maxY - minY}`}
-            style={{ width: '100%', height: 'auto', maxHeight: '65vh', display: 'block' }}
-          >
-            {/* Edges */}
-            {edges.map((edge, i) => {
-              const src = nodeMap.get(edge.source)
-              const tgt = nodeMap.get(edge.target)
-              if (!src || !tgt) return null
-              return (
-                <line
-                  key={i}
-                  x1={src.x} y1={src.y}
-                  x2={tgt.x} y2={tgt.y}
-                  stroke="rgba(255,255,255,0.07)"
-                  strokeWidth={1}
-                />
-              )
-            })}
+      {/* D3 mounts here */}
+      <div ref={containerRef} className="w-full" />
 
-            {/* Nodes */}
-            {nodes.map(node => {
-              const r = nodeRadius(node.count, maxCount)
-              const color = entityColor(node.id)
-              const isSelected = selectedNode?.id === node.id
-              return (
-                <g
-                  key={node.id}
-                  onClick={() => setSelectedNode(node)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <circle
-                    cx={node.x} cy={node.y} r={r}
-                    fill={color}
-                    fillOpacity={isSelected ? 1 : 0.65}
-                    stroke={color}
-                    strokeWidth={isSelected ? 2 : 1}
-                    strokeOpacity={0.9}
-                  />
-                  {node.count >= 3 && (
-                    <text
-                      x={node.x}
-                      y={node.y + r + 9}
-                      textAnchor="middle"
-                      fontSize={7}
-                      fill="rgba(255,255,255,0.45)"
-                      style={{ pointerEvents: 'none' }}
-                    >
-                      {node.id.length > 14 ? node.id.slice(0, 14) + '…' : node.id}
-                    </text>
-                  )}
-                </g>
-              )
-            })}
-          </svg>
+      {!loading && graphNodes.length > 0 && (
+        <p className="text-center text-xs text-slate-600 pt-1 pb-2">
+          Drag · pinch to zoom · tap for details
+        </p>
+      )}
 
-          {/* Legend */}
-          <p className="text-center text-xs text-slate-600 mt-2">
-            Размер ноды = частота упоминаний · нажми для просмотра
-          </p>
+      {/* Color legend */}
+      {!loading && graphNodes.length > 0 && (
+        <div className="px-4 pb-2 flex flex-wrap gap-3 justify-center">
+          {[
+            { color: 'hsl(210, 70%, 60%)', label: 'Инструменты' },
+            { color: 'hsl(145, 58%, 52%)', label: 'Проекты' },
+            { color: 'hsl(265, 62%, 62%)', label: 'Концепции' },
+            { color: 'hsl(30, 78%, 58%)',  label: 'Люди / @' },
+          ].map(({ color, label }) => (
+            <span key={label} className="flex items-center gap-1.5 text-[10px] text-slate-500">
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
+              {label}
+            </span>
+          ))}
         </div>
       )}
 
       {selectedNode && (
-        <NodePanel
-          node={selectedNode}
-          allItems={rawItems}
-          onClose={() => setSelectedNode(null)}
-        />
+        <NodePanel node={selectedNode} allItems={rawItems} onClose={() => setSelectedNode(null)} />
       )}
     </div>
   )
