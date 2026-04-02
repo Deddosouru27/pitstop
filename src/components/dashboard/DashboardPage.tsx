@@ -245,7 +245,8 @@ function CycleWidget() {
   }
 
   const allTasks = Object.values(tasksByPhase).flat()
-  const doneTasks = allTasks.filter(t => t.status === 'done' || t.is_completed).length
+  // cancelled counts as resolved — doesn't block phase completion display
+  const doneTasks = allTasks.filter(t => t.status === 'done' || t.status === 'cancelled' || t.is_completed).length
 
   return (
     <div className="bg-white/5 rounded-2xl px-4 py-4 border border-white/[0.06] space-y-1">
@@ -264,7 +265,7 @@ function CycleWidget() {
           const isDone = phase.status === 'completed'
           const isOpen = expanded === phase.number
           const phaseTasks = tasksByPhase[phase.number] ?? []
-          const phaseDone = phaseTasks.filter(t => t.status === 'done' || t.is_completed).length
+          const phaseDone = phaseTasks.filter(t => t.status === 'done' || t.status === 'cancelled' || t.is_completed).length
 
           return (
             <div
