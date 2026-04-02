@@ -865,6 +865,19 @@ export default function KnowledgePage() {
   const [sourceMap, setSourceMap] = useState<Map<string, SourceInfo>>(new Map())
   const [entityFilter, setEntityFilter] = useState<string | null>(null)
 
+  const topEntities = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const i of items) {
+      for (const e of i.entities ?? []) {
+        if (e.trim()) counts.set(e, (counts.get(e) ?? 0) + 1)
+      }
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 20)
+      .map(([entity, count]) => ({ entity, count }))
+  }, [items])
+
   const types = useMemo(() => {
     const s = new Set<string>()
     for (const i of items) if (i.knowledge_type) s.add(i.knowledge_type)
@@ -905,7 +918,12 @@ export default function KnowledgePage() {
       if (routeFilter === 'archive' && !(routedContains(i.routed_to, 'knowledge_base') && !routedContains(i.routed_to, 'hot_backlog'))) return false
       if (routeFilter === 'discard' && !routedContains(i.routed_to, 'discarded')) return false
       if (sourceFilter !== 'all' && (i.source_type ?? 'text') !== sourceFilter) return false
-      if (search.trim() && !i.content.toLowerCase().includes(search.toLowerCase())) return false
+      if (search.trim()) {
+        const q = search.toLowerCase()
+        const inContent = i.content.toLowerCase().includes(q)
+        const inEntities = (i.entities ?? []).some(e => e.toLowerCase().includes(q))
+        if (!inContent && !inEntities) return false
+      }
       if (entityFilter && !(i.entities ?? []).includes(entityFilter)) return false
       return true
     })
@@ -1114,6 +1132,25 @@ export default function KnowledgePage() {
           <option value="strategic">По strategic</option>
         </select>
       </div>
+
+      {/* Entity cloud */}
+      {topEntities.length > 0 && (
+        <div className="px-4 pb-2 flex gap-1.5 flex-wrap">
+          {topEntities.map(({ entity, count }) => (
+            <button
+              key={entity}
+              onClick={() => setEntityFilter(entityFilter === entity ? null : entity)}
+              className={`shrink-0 text-[10px] font-medium px-2 py-1 rounded-full transition-colors ${
+                entityFilter === entity
+                  ? 'bg-violet-600 text-white'
+                  : 'bg-violet-900/30 border border-violet-700/30 text-violet-400 active:bg-violet-800/40'
+              }`}
+            >
+              {entity} <span className="opacity-60">{count}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Route filter chips with counts */}
       <div className="px-4 pb-2 flex gap-2 overflow-x-auto scrollbar-hide">
