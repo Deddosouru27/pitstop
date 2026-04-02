@@ -574,8 +574,8 @@ function SourceGroupBlock({
   const rawTitle = sourceInfo?.title ?? ''
 
   const topic =
-    sourceInfo?.summary ||
-    (sourceInfo?.title && !sourceInfo.title.startsWith('Instagram') ? sourceInfo.title : null) ||
+    (sourceInfo?.summary?.trim() || null) ||
+    (sourceInfo?.title?.trim() && !sourceInfo.title.startsWith('Instagram') ? sourceInfo.title.trim() : null) ||
     (items[0]?.content ? items[0].content.slice(0, 80) + '...' : null) ||
     'Без заголовка'
 
@@ -996,7 +996,7 @@ export default function KnowledgePage() {
                   : 'bg-white/5 border-white/[0.06] text-slate-400'
               }`}
             >
-              📦 {groupMode ? 'Группы' : 'Группировать'}
+              📦 Группы
             </button>
           )}
           <button
