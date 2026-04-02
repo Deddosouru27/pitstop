@@ -595,11 +595,19 @@ function SourceGroupBlock({
 
   const rawTitle = sourceInfo?.title ?? ''
 
-  const topic =
-    (sourceInfo?.summary?.trim() || null) ||
-    (sourceInfo?.title?.trim() && !sourceInfo.title.startsWith('Instagram') ? sourceInfo.title.trim() : null) ||
-    (items[0]?.content ? items[0].content.slice(0, 80) + '...' : null) ||
-    'Без заголовка'
+  const _summary = sourceInfo?.summary?.trim() || null
+  const _title = (sourceInfo?.title?.trim() && !sourceInfo.title.startsWith('Instagram'))
+    ? sourceInfo.title.trim() : null
+  const _firstContent = items[0]?.content ? items[0].content.slice(0, 80) + '...' : null
+  const topic = _summary || _title || _firstContent || 'Без заголовка'
+  if (!_summary && !_title && !_firstContent) {
+    console.warn('[SourceGroupBlock] All fallbacks empty:', {
+      summary: sourceInfo?.summary,
+      title: sourceInfo?.title,
+      firstContent: items[0]?.content?.slice(0, 40),
+      itemCount: items.length,
+    })
+  }
 
   // Creator = @handle extracted from title only if it looks like a handle, not a URL
   const creatorMatch = rawTitle.match(/@([\w.]+)/)
