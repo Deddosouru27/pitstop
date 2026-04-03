@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
-import { BarChart2, ChevronDown, X } from 'lucide-react'
+import { BarChart2, ChevronDown, X, Plus, Inbox, Lightbulb, Compass } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAgentStats } from '../../hooks/useAgentStats'
 import { useCyclePlan } from '../../hooks/useCyclePlan'
@@ -669,6 +670,34 @@ function CycleTwoWidget() {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
+// ── Quick Actions ─────────────────────────────────────────────────────────────
+
+function QuickActions() {
+  const navigate = useNavigate()
+
+  const actions = [
+    { icon: Plus,      label: 'Добавить задачу',  onClick: () => navigate('/projects') },
+    { icon: Inbox,     label: 'Quick Capture',    onClick: () => navigate('/intake-logs') },
+    { icon: Lightbulb, label: 'Разобрать идеи',   onClick: () => navigate('/ideas-triage') },
+    { icon: Compass,   label: 'Обзор знаний',     onClick: () => navigate('/discovery') },
+  ]
+
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {actions.map(({ icon: Icon, label, onClick }) => (
+        <button
+          key={label}
+          onClick={onClick}
+          className="flex items-center gap-2.5 bg-transparent border border-white/[0.10] hover:border-accent/40 hover:bg-accent/5 active:bg-accent/10 rounded-2xl px-4 py-3 text-left transition-colors"
+        >
+          <Icon size={16} className="text-accent shrink-0" strokeWidth={1.75} />
+          <span className="text-sm text-slate-300 leading-tight">{label}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
 export default function DashboardPage() {
   const { stats, loading } = useAgentStats()
 
@@ -733,6 +762,9 @@ export default function DashboardPage() {
             sub="записей"
           />
         </div>
+
+        {/* Quick actions */}
+        <QuickActions />
 
         {/* Knowledge stats */}
         <KnowledgeStatsWidget />
