@@ -668,6 +668,80 @@ function CycleTwoWidget() {
   )
 }
 
+// ── Quick Capture URL ─────────────────────────────────────────────────────────
+
+function QuickCapture() {
+  const [url, setUrl]     = useState('')
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
+  const [message, setMessage] = useState('')
+
+  const handleProcess = async () => {
+    const trimmed = url.trim()
+    if (!trimmed) return
+    let parsed: URL
+    try {
+      parsed = new URL(trimmed)
+      if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error()
+    } catch {
+      setStatus('error')
+      setMessage('Невалидный URL. Начинается с http:// или https://')
+      return
+    }
+
+    setStatus('loading')
+    setMessage('')
+    try {
+      const res = await fetch('https://maos-intake.vercel.app/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: trimmed, source_type: 'manual' }),
+      })
+      const json = await res.json().catch(() => ({})) as Record<string, unknown>
+      if (!res.ok) {
+        setStatus('error')
+        setMessage(String(json.message ?? json.error ?? `HTTP ${res.status}`))
+        return
+      }
+      const count = json.knowledge_count ?? json.items_count ?? json.count ?? null
+      setStatus('success')
+      setMessage(count != null ? `Обработано: ${count} knowledge items` : 'Обработано')
+      setUrl('')
+    } catch (err) {
+      setStatus('error')
+      setMessage(err instanceof Error ? err.message : 'Сетевая ошибка')
+    }
+  }
+
+  return (
+    <div className="bg-white/5 rounded-2xl px-4 py-4 border border-white/[0.06] space-y-3">
+      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">📥 Quick Capture URL</p>
+      <div className="flex gap-2">
+        <input
+          type="url"
+          value={url}
+          onChange={e => { setUrl(e.target.value); setStatus('idle'); setMessage('') }}
+          onKeyDown={e => e.key === 'Enter' && handleProcess()}
+          placeholder="https://..."
+          className="flex-1 bg-surface text-slate-100 placeholder-slate-600 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-accent min-w-0"
+        />
+        <button
+          onClick={handleProcess}
+          disabled={!url.trim() || status === 'loading'}
+          className="bg-accent hover:bg-accent/90 disabled:opacity-40 text-white font-medium rounded-xl px-4 py-2.5 text-sm transition-colors shrink-0"
+        >
+          {status === 'loading' ? '⏳' : 'Обработать'}
+        </button>
+      </div>
+      {status === 'success' && (
+        <p className="text-xs text-emerald-400">✅ {message}</p>
+      )}
+      {status === 'error' && (
+        <p className="text-xs text-red-400">❌ Ошибка: {message}</p>
+      )}
+    </div>
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 // ── Quick Actions ─────────────────────────────────────────────────────────────
@@ -765,6 +839,9 @@ export default function DashboardPage() {
 
         {/* Quick actions */}
         <QuickActions />
+
+        {/* Quick capture */}
+        <QuickCapture />
 
         {/* Knowledge stats */}
         <KnowledgeStatsWidget />
