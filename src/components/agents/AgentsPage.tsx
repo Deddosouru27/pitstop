@@ -61,7 +61,7 @@ function RepoBadge({ repo }: { repo: string | null }) {
 // ── Agent card ─────────────────────────────────────────────────────────────────
 
 function AgentCard({ agent }: { agent: Agent }) {
-  const heartbeat = agent.last_heartbeat ? timeAgo(agent.last_heartbeat) : 'Нет данных'
+  const heartbeat = agent.last_heartbeat ? timeAgo(agent.last_heartbeat) : '—'
 
   return (
     <div className={`bg-white/5 rounded-2xl border p-4 space-y-3 ${
