@@ -83,6 +83,7 @@ function highlightText(text: string, query: string): ReactNode {
 }
 
 type SimilarItem = { id: string; content: string; similarity: number; knowledge_type: string | null }
+type RelatedItem = { id: string; content: string; knowledge_type: string | null; immediate_relevance: number | null }
 
 function KnowledgeModal({ item, onClose, onOpenItem }: {
   item: ExtractedKnowledge
@@ -96,6 +97,19 @@ function KnowledgeModal({ item, onClose, onOpenItem }: {
   const [similarLoading, setSimilarLoading] = useState(false)
   const [history, setHistory] = useState<MemoryHistory[] | null>(null)
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [related, setRelated] = useState<RelatedItem[]>([])
+
+  useEffect(() => {
+    if (!item.knowledge_type) return
+    supabase
+      .from('extracted_knowledge')
+      .select('id, content, knowledge_type, immediate_relevance')
+      .eq('knowledge_type', item.knowledge_type)
+      .neq('id', item.id)
+      .order('immediate_relevance', { ascending: false })
+      .limit(3)
+      .then(({ data }) => setRelated((data ?? []) as RelatedItem[]))
+  }, [item.id, item.knowledge_type])
 
   async function loadRaw() {
     if (!item.ingested_content_id) return
@@ -351,6 +365,40 @@ function KnowledgeModal({ item, onClose, onOpenItem }: {
                 style={{ minHeight: '200px', maxHeight: '360px' }}
                 className="w-full bg-white/5 border border-white/[0.06] rounded-xl px-3 py-2.5 text-xs text-slate-400 resize-none outline-none font-mono leading-relaxed"
               />
+            </div>
+          )}
+
+          {/* Related knowledge by topic */}
+          {related.length > 0 && (
+            <div>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider font-medium mb-2">
+                Похожие знания
+              </p>
+              <div className="space-y-2">
+                {related.map(r => (
+                  <button
+                    key={r.id}
+                    onClick={() => onOpenItem(r.id)}
+                    className="w-full text-left bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2.5 space-y-1.5 active:bg-white/[0.06] transition-colors"
+                  >
+                    <p className="text-xs text-slate-300 leading-relaxed line-clamp-2">
+                      {r.content.slice(0, 100)}{r.content.length > 100 ? '…' : ''}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      {r.knowledge_type && (
+                        <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full ${TYPE_COLORS[r.knowledge_type] ?? 'bg-slate-800 text-slate-400'}`}>
+                          {r.knowledge_type}
+                        </span>
+                      )}
+                      {r.immediate_relevance != null && (
+                        <span className="text-[9px] text-slate-600 ml-auto">
+                          relevance: {Math.round(r.immediate_relevance * 10) / 10}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
