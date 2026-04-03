@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
-import { BarChart2, ChevronDown, X, Plus, Inbox, Lightbulb, Compass } from 'lucide-react'
+import { BarChart2, ChevronDown, X, Plus, Inbox, Lightbulb, Compass, Users } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAgentStats } from '../../hooks/useAgentStats'
 import { useCyclePlan } from '../../hooks/useCyclePlan'
@@ -90,6 +90,37 @@ function KnowledgeStatsWidget() {
           <span className="text-[11px] text-slate-600">📥 {timeAgo(stats.lastIngestedAt)}</span>
         )}
       </div>
+    </div>
+  )
+}
+
+// ── Agent count widget ────────────────────────────────────────────────────────
+
+function AgentCountWidget() {
+  const [total, setTotal] = useState<number>(0)
+  const [active, setActive] = useState<number>(0)
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([
+      supabase.from('agents').select('*', { count: 'exact', head: true }),
+      supabase.from('agents').select('*', { count: 'exact', head: true }).neq('status', 'idle'),
+    ]).then(([totalRes, activeRes]) => {
+      if (cancelled) return
+      setTotal(totalRes.count ?? 0)
+      setActive(activeRes.count ?? 0)
+    })
+    return () => { cancelled = true }
+  }, [])
+
+  return (
+    <div className="bg-white/5 rounded-2xl px-4 py-3 border border-white/[0.06] flex items-center gap-3">
+      <Users size={16} className="text-purple-400 shrink-0" strokeWidth={1.75} />
+      <p className="text-xs font-medium text-slate-300">
+        Агенты: <span className="text-slate-100 font-bold">{total}</span>
+        <span className="text-slate-600 mx-1.5">|</span>
+        Активных: <span className={active > 0 ? 'text-emerald-400 font-bold' : 'text-slate-500 font-bold'}>{active}</span>
+      </p>
     </div>
   )
 }
@@ -810,8 +841,9 @@ export default function DashboardPage() {
       </div>
 
       <div className="px-4 space-y-6">
-        {/* Autorun status */}
+        {/* Autorun status + agent count */}
         <AutorunStatus />
+        <AgentCountWidget />
 
         {/* Stat cards */}
         <div className="grid grid-cols-2 gap-2">
