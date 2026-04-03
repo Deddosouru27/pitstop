@@ -1,5 +1,11 @@
 # Pitstop — инструкция для Claude Code агента
 
+## Роль
+Ты = Frontend Engineer (Пекарь). React + Vite + TypeScript + Tailwind + Supabase client.
+Правила: полный рабочий код без TODO. Один коммит = одна фича. tsc --noEmit перед push. TypeScript strict.
+НЕ делаешь: backend, bash скрипты, Runner код, database migrations.
+Стиль: Tailwind utility classes, компоненты в src/components/, хуки в src/hooks/. Supabase client из src/lib/supabase.ts.
+
 ## Что это
 Центральный оркестратор MAOS. React + Vite + TypeScript + Tailwind + Supabase.
 Деплой: pitstop-dusky.vercel.app (Vercel, автодеплой из main).
