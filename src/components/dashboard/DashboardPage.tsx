@@ -465,6 +465,111 @@ function CycleWidget() {
   )
 }
 
+// ── Activity Feed ─────────────────────────────────────────────────────────────
+
+interface FeedItem {
+  id: string
+  icon: string
+  text: string
+  sub: string | null
+  ts: string
+}
+
+function ActivityFeed() {
+  const [items, setItems] = useState<FeedItem[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([
+      supabase
+        .from('context_snapshots')
+        .select('id, snapshot_type, content, created_at')
+        .in('snapshot_type', ['task_completed', 'ai_summary'])
+        .order('created_at', { ascending: false })
+        .limit(10),
+      supabase
+        .from('tasks')
+        .select('id, title, completed_at, status')
+        .not('completed_at', 'is', null)
+        .order('completed_at', { ascending: false })
+        .limit(10),
+    ]).then(([snapsRes, tasksRes]) => {
+      if (cancelled) return
+
+      const feed: FeedItem[] = []
+
+      for (const s of snapsRes.data ?? []) {
+        const c = s.content as Record<string, unknown>
+        if (s.snapshot_type === 'task_completed') {
+          feed.push({
+            id: `snap-${s.id}`,
+            icon: '✅',
+            text: `Задача: ${String(c.title ?? '—')}`,
+            sub: null,
+            ts: s.created_at,
+          })
+        } else if (s.snapshot_type === 'ai_summary') {
+          const url = String(c.source_url ?? c.what_done ?? '')
+          const kCount = c.knowledge_count != null ? `${c.knowledge_count} знаний` : null
+          feed.push({
+            id: `snap-${s.id}`,
+            icon: '📥',
+            text: url ? `Обработано: ${url.length > 60 ? url.slice(0, 60) + '…' : url}` : String(c.what_done ?? 'AI summary'),
+            sub: kCount,
+            ts: s.created_at,
+          })
+        }
+      }
+
+      for (const t of tasksRes.data ?? []) {
+        if (!t.completed_at) continue
+        feed.push({
+          id: `task-${t.id}`,
+          icon: '✔️',
+          text: `Закрыто: ${t.title}`,
+          sub: null,
+          ts: t.completed_at,
+        })
+      }
+
+      // Deduplicate by id and sort by date desc, take top 10
+      const seen = new Set<string>()
+      const merged = feed
+        .filter(f => { if (seen.has(f.id)) return false; seen.add(f.id); return true })
+        .sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime())
+        .slice(0, 10)
+
+      setItems(merged)
+      setLoading(false)
+    })
+    return () => { cancelled = true }
+  }, [])
+
+  if (loading) return null
+  if (items.length === 0) return null
+
+  return (
+    <div className="bg-white/5 rounded-2xl px-4 py-4 border border-white/[0.06] space-y-1">
+      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider pb-1">
+        ⚡ Последние события
+      </p>
+      {items.map(item => (
+        <div key={item.id} className="flex items-start gap-2.5 py-1.5 border-t border-white/[0.04] first:border-0">
+          <span className="text-sm shrink-0 mt-0.5">{item.icon}</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-slate-300 leading-snug truncate">{item.text}</p>
+            {item.sub && <p className="text-[10px] text-slate-600 mt-0.5">{item.sub}</p>}
+          </div>
+          <span className="text-[10px] text-slate-600 shrink-0 font-mono">
+            {timeAgo(item.ts)}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ── Cycle 2 widget ────────────────────────────────────────────────────────────
 
 function CycleTwoWidget() {
@@ -664,6 +769,9 @@ export default function DashboardPage() {
 
         {/* Cycle 2 progress */}
         <CycleTwoWidget />
+
+        {/* Activity feed */}
+        <ActivityFeed />
       </div>
     </div>
   )
