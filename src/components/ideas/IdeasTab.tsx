@@ -465,9 +465,11 @@ export default function IdeasTab() {
           idea={selectedIdea}
           project={projects.find(p => p.id === selectedIdea.project_id)}
           onClose={() => setSelectedIdea(null)}
-          onConvert={markConverted}
+          onOpenConvert={() => { setConvertIdea(selectedIdea); setSelectedIdea(null) }}
           onDelete={deleteIdea}
-          onUpdateStatus={updateStatus}
+          onApprove={async (id) => { await updateStatus([id], 'accepted') }}
+          onReject={async (id, reason) => { await rejectIdeas([id], reason || undefined) }}
+          onDefer={async (id) => { await updateStatus([id], 'deferred') }}
         />
       )}
 
