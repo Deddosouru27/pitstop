@@ -14,14 +14,14 @@ const ASSIGNEE_BADGE: Record<string, string> = {
   intake: '🔧',
 }
 
-const STATUS_DOT: Record<TaskStatus, { color: string; label: string }> = {
-  backlog: { color: 'bg-slate-500', label: 'Backlog' },
-  todo: { color: 'bg-blue-500', label: 'To Do' },
-  in_progress: { color: 'bg-yellow-500', label: 'In Progress' },
-  review: { color: 'bg-purple-400', label: 'Review' },
-  blocked: { color: 'bg-red-500', label: 'Blocked' },
-  done: { color: 'bg-green-500', label: 'Done' },
-  cancelled: { color: 'bg-slate-600', label: 'Cancelled' },
+
+const STATUS_BADGE: Partial<Record<TaskStatus, { text: string; cls: string }>> = {
+  todo:        { text: 'Todo',      cls: 'bg-slate-800 text-slate-400' },
+  in_progress: { text: 'В работе', cls: 'bg-yellow-900/40 text-yellow-400' },
+  done:        { text: 'Готово',   cls: 'bg-green-900/40 text-green-400' },
+  cancelled:   { text: 'Отклонено', cls: 'bg-red-900/40 text-red-400' },
+  blocked:     { text: 'Blocked',  cls: 'bg-red-900/50 text-red-500' },
+  review:      { text: 'Review',   cls: 'bg-purple-900/40 text-purple-400' },
 }
 
 interface Props {
@@ -76,11 +76,10 @@ const TaskItem = memo(function TaskItem({ task, project, onToggle, onOpen }: Pro
             {ASSIGNEE_BADGE[task.assignee]}
           </span>
         )}
-        {task.status && !task.is_completed && STATUS_DOT[task.status] && (
-          <span
-            className={`w-2.5 h-2.5 rounded-full ${STATUS_DOT[task.status].color}`}
-            title={STATUS_DOT[task.status].label}
-          />
+        {task.status && !task.is_completed && STATUS_BADGE[task.status] && (
+          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${STATUS_BADGE[task.status]!.cls}`}>
+            {STATUS_BADGE[task.status]!.text}
+          </span>
         )}
         {task.priority !== 'none' && !task.is_completed && (
           <span className={`w-2 h-2 rounded-full ${PRIORITY_DOT[task.priority]}`} />
