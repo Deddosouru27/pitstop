@@ -1,9 +1,9 @@
 import { useState, useMemo } from 'react'
-import { Lightbulb, CheckSquare, Square, X } from 'lucide-react'
+import { Lightbulb, CheckSquare, Square, X, ArrowRightCircle } from 'lucide-react'
 import { useAllIdeas } from '../../hooks/useAllIdeas'
 import { useApp } from '../../context/AppContext'
 import IdeaDetailModal from './IdeaDetailModal'
-import { supabase } from '../../lib/supabase'
+import ConvertToTaskModal from './ConvertToTaskModal'
 import type { Idea } from '../../types'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -90,7 +90,7 @@ function RejectModal({ count, onConfirm, onCancel }: {
 
 // ── IdeaCard ──────────────────────────────────────────────────────────────────
 
-function IdeaCard({ idea, projectName, projectColor, selected, selectMode, onOpen, onToggleSelect }: {
+function IdeaCard({ idea, projectName, projectColor, selected, selectMode, onOpen, onToggleSelect, onConvert }: {
   idea: Idea
   projectName: string | undefined
   projectColor: string | undefined
@@ -98,25 +98,39 @@ function IdeaCard({ idea, projectName, projectColor, selected, selectMode, onOpe
   selectMode: boolean
   onOpen: (idea: Idea) => void
   onToggleSelect: (id: string) => void
+  onConvert: (idea: Idea) => void
 }) {
   const categoryClass = CATEGORY_COLORS[idea.ai_category] ?? CATEGORY_COLORS.other
   const title = idea.summary?.trim()
     || (idea.content.length > 80 ? idea.content.slice(0, 80) + '…' : idea.content)
 
   return (
-    <button
-      onClick={() => selectMode ? onToggleSelect(idea.id) : onOpen(idea)}
-      className={`w-full text-left rounded-2xl p-3.5 space-y-2 border transition-all active:opacity-70 ${
+    <div
+      className={`w-full text-left rounded-2xl p-3.5 space-y-2 border transition-all ${
         selected ? 'bg-purple-600/15 border-purple-500/40' : 'bg-white/5 border-white/[0.06]'
       }`}
     >
       <div className="flex items-start gap-2.5">
         {selectMode && (
-          <span className="shrink-0 mt-0.5 text-purple-400">
+          <button onClick={() => onToggleSelect(idea.id)} className="shrink-0 mt-0.5 text-purple-400 active:opacity-70">
             {selected ? <CheckSquare size={16} /> : <Square size={16} className="text-slate-600" />}
-          </span>
+          </button>
         )}
-        <p className="flex-1 text-slate-100 text-sm font-medium line-clamp-2 leading-snug">{title}</p>
+        <button
+          onClick={() => selectMode ? onToggleSelect(idea.id) : onOpen(idea)}
+          className="flex-1 text-left active:opacity-70"
+        >
+          <p className="text-slate-100 text-sm font-medium line-clamp-2 leading-snug">{title}</p>
+        </button>
+        {!selectMode && !idea.converted_to_task && (
+          <button
+            onClick={e => { e.stopPropagation(); onConvert(idea) }}
+            className="shrink-0 text-slate-600 active:text-purple-400 transition-colors mt-0.5"
+            title="Создать задачу"
+          >
+            <ArrowRightCircle size={15} />
+          </button>
+        )}
       </div>
       <div className="flex items-center gap-2 flex-wrap">
         {idea.relevance === 'hot' && (
@@ -155,7 +169,7 @@ function IdeaCard({ idea, projectName, projectColor, selected, selectMode, onOpe
           </div>
         )}
       </div>
-    </button>
+    </div>
   )
 }
 
@@ -225,6 +239,7 @@ export default function IdeasTab() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [selectedIdea, setSelectedIdea] = useState<Idea | null>(null)
   const [rejectModalOpen, setRejectModalOpen] = useState(false)
+  const [convertIdea, setConvertIdea] = useState<Idea | null>(null)
 
   const projectMap = useMemo(() => {
     const m = new Map<string, { name: string; color: string }>()
@@ -288,22 +303,12 @@ export default function IdeasTab() {
     await rejectIdeas(ids, reason || undefined)
   }
 
-  async function handleConvertSingle() {
+  function handleConvertSingle() {
     const id = Array.from(selectedIds)[0]
     const idea = ideas.find(i => i.id === id)
     if (!idea) return
     exitSelectMode()
-    await supabase.from('tasks').insert({
-      title: idea.summary?.trim() || idea.content.slice(0, 80),
-      description: idea.content,
-      project_id: idea.project_id ?? null,
-      priority: 'medium',
-      due_date: null,
-      status: 'todo',
-      is_completed: false,
-    })
-    await updateStatus([id], 'accepted')
-    await markConverted(id)
+    setConvertIdea(idea)
   }
 
   if (loading) {
@@ -425,6 +430,7 @@ export default function IdeasTab() {
                 selectMode={selectMode}
                 onOpen={setSelectedIdea}
                 onToggleSelect={toggleSelect}
+                onConvert={setConvertIdea}
               />
             )
           })
@@ -462,6 +468,15 @@ export default function IdeasTab() {
           onConvert={markConverted}
           onDelete={deleteIdea}
           onUpdateStatus={updateStatus}
+        />
+      )}
+
+      {/* Convert to task modal */}
+      {convertIdea && (
+        <ConvertToTaskModal
+          idea={convertIdea}
+          onClose={() => setConvertIdea(null)}
+          onCreated={() => markConverted(convertIdea.id)}
         />
       )}
     </div>
