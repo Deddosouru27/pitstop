@@ -66,8 +66,8 @@ export function useStatsData() {
       const strategic = ideasAll.filter(i => i.relevance === 'strategic').length
       const total = ideasAll.length
       const relevanceStats: RelevanceStat[] = [
-        { label: '🔥 Hot', count: hot, pct: total > 0 ? Math.round(hot / total * 100) : 0 },
-        { label: '📐 Strategic', count: strategic, pct: total > 0 ? Math.round(strategic / total * 100) : 0 },
+        { label: '🔥 Горячие', count: hot, pct: total > 0 ? Math.round(hot / total * 100) : 0 },
+        { label: '📐 Стратегические', count: strategic, pct: total > 0 ? Math.round(strategic / total * 100) : 0 },
         { label: '⬜ Обычные', count: total - hot - strategic, pct: total > 0 ? Math.round((total - hot - strategic) / total * 100) : 0 },
       ]
 

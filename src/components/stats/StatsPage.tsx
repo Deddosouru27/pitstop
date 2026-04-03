@@ -4,6 +4,13 @@ import type { DayCount, RelevanceStat, EntityStats, SourceStat } from '../../hoo
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 
+const SOURCE_LABELS: Record<string, string> = {
+  instagram: 'Instagram',
+  link:      'Ссылки',
+  article:   'Статьи',
+  text:      'Текст',
+}
+
 const SOURCE_COLORS: Record<string, string> = {
   youtube:        '#ef4444',
   instagram:      '#ec4899',
@@ -130,7 +137,7 @@ function EntityStatsCards({ stats }: { stats: EntityStats }) {
   const cards = [
     { label: 'Сущностей', value: stats.nodes, icon: '🕸' },
     { label: 'Связей', value: stats.edges, icon: '🔗' },
-    { label: 'Avg связей', value: stats.avgConnections, icon: '📊' },
+    { label: 'Средних связей', value: stats.avgConnections, icon: '📊' },
   ]
   return (
     <div className="grid grid-cols-3 gap-2">
@@ -196,7 +203,7 @@ function DonutChart({ data }: { data: SourceStat[] }) {
         {slices.map((s, i) => (
           <div key={i} className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: s.color }} />
-            <span className="text-[10px] text-slate-400 truncate flex-1">{s.label}</span>
+            <span className="text-[10px] text-slate-400 truncate flex-1">{SOURCE_LABELS[s.label] ?? s.label}</span>
             <span className="text-[10px] text-slate-600 shrink-0">{s.count} · {s.pct}%</span>
           </div>
         ))}
@@ -259,17 +266,17 @@ export default function StatsPage() {
           </Widget>
 
           {/* 2. Ideas by relevance */}
-          <Widget title="💡 Ideas по relevance">
+          <Widget title="💡 Идеи по приоритету">
             <RelevanceBar data={data.relevanceStats} />
           </Widget>
 
           {/* 3. Entity graph */}
-          <Widget title="🕸 Entity Graph">
+          <Widget title="🕸 Граф сущностей">
             <EntityStatsCards stats={data.entityStats} />
           </Widget>
 
           {/* 4. Ingestion sources */}
-          <Widget title="📥 Источники Ingestion">
+          <Widget title="📥 Источники данных">
             <DonutChart data={data.ingestionSources} />
           </Widget>
         </div>
