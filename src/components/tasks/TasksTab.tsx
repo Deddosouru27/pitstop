@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Plus } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
 import TaskItem from './TaskItem'
@@ -71,10 +71,17 @@ function TaskGroup({ label, labelClass, tasks, projects, onToggle, onOpen }: Gro
 }
 
 export default function TasksTab() {
-  const { tasks, tasksLoading, projects, createTask, completeTask, openTask } = useApp()
+  const { tasks, tasksLoading, projects, completeTask, openTask } = useApp()
   const [showModal, setShowModal] = useState(false)
   const [showDone, setShowDone] = useState(false)
+  const [toast, setToast] = useState(false)
   const groups = useGroupedTasks(tasks)
+
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(false), 3000)
+    return () => clearTimeout(t)
+  }, [toast])
 
   const activeCount = groups.overdue.length + groups.today.length + groups.upcoming.length + groups.noDate.length
 
@@ -160,10 +167,15 @@ export default function TasksTab() {
 
       {showModal && (
         <CreateTaskModal
-          projects={projects}
           onClose={() => setShowModal(false)}
-          onCreate={async (input) => { await createTask(input) }}
+          onCreated={() => setToast(true)}
         />
+      )}
+
+      {toast && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-emerald-900/90 border border-emerald-700/50 text-emerald-300 text-sm font-medium px-4 py-2.5 rounded-2xl shadow-xl animate-fade-in whitespace-nowrap">
+          ✅ Задача создана
+        </div>
       )}
     </div>
   )

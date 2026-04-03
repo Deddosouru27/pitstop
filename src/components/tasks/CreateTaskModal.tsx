@@ -1,92 +1,75 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState } from 'react'
 import { X } from 'lucide-react'
-import type { Priority, Project } from '../../types'
-import { useApp } from '../../context/AppContext'
-import { inferPriority } from '../../utils/inferPriority'
-import { addSnapshot } from '../../hooks/useContextSnapshots'
+import { supabase } from '../../lib/supabase'
+
+const MAOS_PROJECT_ID = 'f2896db9-8eeb-4a15-a49f-7b8571f09dfe'
 
 const ASSIGNEES = [
-  { value: '', label: 'Авто (autorun решит)' },
-  { value: 'baker', label: 'Пекарь (Pitstop)' },
-  { value: 'runner', label: 'Ноут (Runner/Brain)' },
-  { value: 'intake', label: 'Интакер (Intake)' },
+  { value: 'autorun', label: 'Autorun' },
+  { value: 'pekar',   label: 'Пекарь' },
+  { value: 'intaker', label: 'Интакер' },
+  { value: 'nout',    label: 'Ноут' },
+  { value: 'opus',    label: 'Opus' },
+  { value: 'sonnet',  label: 'Sonnet' },
+  { value: 'artur',   label: 'Артур' },
+]
+
+const WORK_TYPES = [
+  { value: 'blocker',       label: 'Blocker' },
+  { value: 'critical_fix',  label: 'Critical Fix' },
+  { value: 'enabling',      label: 'Enabling' },
+  { value: 'product',       label: 'Product' },
+  { value: 'nice_to_have',  label: 'Nice to Have' },
+  { value: 'exploration',   label: 'Exploration' },
 ]
 
 interface Props {
-  projects: Project[]
-  recentIdeas?: { content: string }[]
   onClose: () => void
-  onCreate: (input: { title: string; description?: string | null; priority: Priority; due_date: string | null; project_id: string | null; assignee?: string | null }) => Promise<void>
+  onCreated: () => void
 }
 
-const PRIORITIES: { value: Priority; label: string; activeClass: string }[] = [
-  { value: 'none', label: 'None', activeClass: 'bg-slate-600 text-slate-100' },
-  { value: 'low', label: 'Low', activeClass: 'bg-accent-blue text-white' },
-  { value: 'medium', label: 'Medium', activeClass: 'bg-warning text-black' },
-  { value: 'high', label: 'High', activeClass: 'bg-danger text-white' },
-]
-
-export default function CreateTaskModal({ projects, recentIdeas = [], onClose, onCreate }: Props) {
-  const { tasks } = useApp()
-  const tasksRef = useRef(tasks)
-  useEffect(() => { tasksRef.current = tasks }, [tasks])
-
-  const [title, setTitle] = useState('')
+export default function CreateTaskModal({ onClose, onCreated }: Props) {
+  const [title, setTitle]             = useState('')
   const [description, setDescription] = useState('')
-  const [priority, setPriority] = useState<Priority>('none')
-  const [isAutoInferred, setIsAutoInferred] = useState(false)
-  const [dueDate, setDueDate] = useState('')
-  const [projectId, setProjectId] = useState('')
-  const [assignee, setAssignee] = useState('')
+  const [assignee, setAssignee]       = useState('autorun')
+  const [workType, setWorkType]       = useState('product')
+  const [phaseNumber, setPhaseNumber] = useState(3)
+  const [autorunSafe, setAutorunSafe] = useState(false)
+  const [submitting, setSubmitting]   = useState(false)
+  const [error, setError]             = useState<string | null>(null)
 
-  // Debounced priority inference
-  useEffect(() => {
-    if (!title.trim() || !projectId) {
-      setIsAutoInferred(false)
-      return
-    }
-    const timer = setTimeout(() => {
-      const project = projects.find(p => p.id === projectId)
-      if (!project) return
-
-      const activeTasks = tasksRef.current
-        .filter(t => t.project_id === projectId && !t.is_completed)
-        .map(t => ({ title: t.title, priority: t.priority }))
-
-      const inferred = inferPriority(title, {
-        nextStep: project.ai_next_step ?? '',
-        whereStoped: project.ai_where_stopped ?? '',
-        activeTasks,
-        recentIdeas,
-      })
-
-      setPriority(inferred)
-      setIsAutoInferred(true)
-
-      // Log non-trivial inferences
-      if (inferred !== 'low') {
-        addSnapshot(projectId, 'priority_inferred', {
-          taskTitle: title,
-          inferredPriority: inferred,
-          reason: 'auto',
-        })
-      }
-    }, 500)
-
-    return () => clearTimeout(timer)
-  }, [title, projectId]) // eslint-disable-line react-hooks/exhaustive-deps
+  const canSubmit = title.trim().length > 0 && description.trim().length > 0 && !submitting
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!title.trim()) return
-    await onCreate({
-      title: title.trim(),
-      description: description.trim() || null,
-      priority,
-      due_date: dueDate || null,
-      project_id: projectId || null,
-      assignee: assignee || null,
+    if (!canSubmit) return
+    setSubmitting(true)
+    setError(null)
+
+    const finalDescription = autorunSafe
+      ? `AUTORUN SAFE: REPO: pitstop. ${description.trim()}`
+      : description.trim()
+
+    const { error: insertError } = await supabase.from('tasks').insert({
+      title:        title.trim(),
+      description:  finalDescription,
+      assignee,
+      work_type:    workType,
+      phase_number: phaseNumber,
+      project_id:   MAOS_PROJECT_ID,
+      is_completed: false,
+      priority:     'none',
+      due_date:     null,
+      status:       'todo',
     })
+
+    if (insertError) {
+      setError(insertError.message)
+      setSubmitting(false)
+      return
+    }
+
+    onCreated()
     onClose()
   }
 
@@ -98,107 +81,97 @@ export default function CreateTaskModal({ projects, recentIdeas = [], onClose, o
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold">New Task</h2>
+          <h2 className="text-base font-semibold text-slate-100">Создать задачу</h2>
           <button onClick={onClose} className="text-slate-500 hover:text-slate-300">
             <X size={20} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-3">
+          {/* Title */}
           <input
             autoFocus
             type="text"
-            placeholder="What needs to be done?"
+            placeholder="Название задачи *"
             value={title}
             onChange={e => setTitle(e.target.value)}
             className="w-full bg-surface text-slate-100 placeholder-slate-600 rounded-xl px-4 py-3 text-sm outline-none focus:ring-1 focus:ring-accent"
           />
 
-          <div className="space-y-1">
-            <textarea
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-              placeholder="Опиши задачу для агента: что сделать, в каком репо, ожидаемый результат"
-              rows={3}
-              className="w-full bg-surface text-slate-100 placeholder-slate-600 rounded-xl px-4 py-3 text-sm outline-none focus:ring-1 focus:ring-accent resize-none"
-            />
-            {!description.trim() && (
-              <p className="text-[11px] text-slate-600 px-1">
-                Без описания — autorun пропустит задачу
-              </p>
-            )}
-          </div>
+          {/* Description */}
+          <textarea
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+            placeholder="Описание — что сделать, в каком репо, ожидаемый результат *"
+            rows={3}
+            className="w-full bg-surface text-slate-100 placeholder-slate-600 rounded-xl px-4 py-3 text-sm outline-none focus:ring-1 focus:ring-accent resize-none"
+          />
 
-          {/* Priority chips */}
-          <div className="space-y-1.5">
-            <label className="text-xs text-slate-500">Priority</label>
-            <div className="flex gap-2">
-              {PRIORITIES.map(({ value, label, activeClass }) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => { setPriority(value); setIsAutoInferred(false) }}
-                  className={`flex-1 py-2 rounded-xl text-xs font-medium transition-colors ${
-                    priority === value ? activeClass : 'bg-surface text-slate-500'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            {isAutoInferred && (
-              <p className="text-[11px] text-slate-400">Приоритет определён автоматически</p>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label className="text-xs text-slate-500">Due date</label>
-              <input
-                type="date"
-                value={dueDate}
-                onChange={e => setDueDate(e.target.value)}
-                className="w-full bg-surface text-slate-100 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-accent [color-scheme:dark]"
-              />
-            </div>
-
-            {projects.length > 0 && (
-              <div className="space-y-1.5">
-                <label className="text-xs text-slate-500">Project</label>
-                <select
-                  value={projectId}
-                  onChange={e => setProjectId(e.target.value)}
-                  className="w-full bg-surface text-slate-100 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-accent"
-                >
-                  <option value="">None</option>
-                  {projects.map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-          </div>
-
-          {/* Assignee */}
-          <div className="space-y-1.5">
-            <label className="text-xs text-slate-500">Исполнитель</label>
-            <select
-              value={assignee}
-              onChange={e => setAssignee(e.target.value)}
-              className="w-full bg-surface text-slate-100 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-accent"
+          {/* AUTORUN SAFE */}
+          <label className="flex items-center gap-3 cursor-pointer select-none">
+            <div
+              onClick={() => setAutorunSafe(v => !v)}
+              className={`w-10 h-5 rounded-full transition-colors relative ${autorunSafe ? 'bg-emerald-600' : 'bg-white/10'}`}
             >
-              {ASSIGNEES.map(a => (
-                <option key={a.value} value={a.value}>{a.label}</option>
-              ))}
-            </select>
+              <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${autorunSafe ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            </div>
+            <div>
+              <p className="text-sm text-slate-200 font-medium">AUTORUN SAFE</p>
+              <p className="text-[11px] text-slate-500">Добавит префикс «AUTORUN SAFE: REPO: pitstop.»</p>
+            </div>
+          </label>
+
+          {/* Assignee + Work type */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs text-slate-500">Исполнитель</label>
+              <select
+                value={assignee}
+                onChange={e => setAssignee(e.target.value)}
+                className="w-full bg-surface text-slate-100 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-accent"
+              >
+                {ASSIGNEES.map(a => (
+                  <option key={a.value} value={a.value}>{a.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-slate-500">Тип работы</label>
+              <select
+                value={workType}
+                onChange={e => setWorkType(e.target.value)}
+                className="w-full bg-surface text-slate-100 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-accent"
+              >
+                {WORK_TYPES.map(w => (
+                  <option key={w.value} value={w.value}>{w.label}</option>
+                ))}
+              </select>
+            </div>
           </div>
+
+          {/* Phase number */}
+          <div className="space-y-1">
+            <label className="text-xs text-slate-500">Phase</label>
+            <input
+              type="number"
+              min={1}
+              max={10}
+              value={phaseNumber}
+              onChange={e => setPhaseNumber(Number(e.target.value))}
+              className="w-full bg-surface text-slate-100 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-1 focus:ring-accent [color-scheme:dark]"
+            />
+          </div>
+
+          {error && (
+            <p className="text-xs text-red-400 px-1">{error}</p>
+          )}
 
           <button
             type="submit"
-            disabled={!title.trim()}
+            disabled={!canSubmit}
             className="w-full bg-accent hover:bg-accent/90 disabled:opacity-40 text-white font-semibold rounded-xl py-3 text-sm transition-colors"
           >
-            Add Task
+            {submitting ? 'Создаём...' : 'Создать задачу'}
           </button>
         </form>
       </div>

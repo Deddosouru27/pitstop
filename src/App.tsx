@@ -3,6 +3,7 @@ import { AppProvider, useApp } from './context/AppContext'
 import BottomNav from './components/BottomNav'
 import TaskDetail from './components/tasks/TaskDetail'
 import ProjectsTab from './components/projects/ProjectsTab'
+import TasksTab from './components/tasks/TasksTab'
 import ProjectDetail from './components/projects/ProjectDetail'
 import CalendarTab from './components/calendar/CalendarTab'
 import IdeasTab from './components/ideas/IdeasTab'
@@ -33,6 +34,7 @@ function AppShell() {
         <Routes>
           <Route path="/" element={<Navigate to="/projects" replace />} />
           <Route path="/projects" element={<ProjectsTab />} />
+          <Route path="/tasks" element={<TasksTab />} />
           <Route path="/projects/:id" element={<ProjectDetail />} />
           <Route path="/calendar" element={<CalendarTab />} />
           <Route path="/ideas" element={<IdeasTab />} />

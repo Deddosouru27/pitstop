@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { FolderOpen, Lightbulb, BookOpen, Network, MoreHorizontal, X, BarChart2, Brain, Target, Inbox, Settings, ScrollText, ListTodo, TrendingUp, Activity, Users, Compass, Bell } from 'lucide-react'
+import { FolderOpen, Lightbulb, BookOpen, Network, MoreHorizontal, X, BarChart2, Brain, Target, Inbox, Settings, ScrollText, ListTodo, TrendingUp, Activity, Users, Compass, Bell, CheckSquare } from 'lucide-react'
 import { useNewIdeasCount } from '../hooks/useNewIdeasCount'
 
 const PRIMARY = [
@@ -12,7 +12,8 @@ const PRIMARY = [
 ]
 
 const SECONDARY = [
-  { to: '/pending',       icon: Bell,       label: 'Pending' },
+  { to: '/tasks',         icon: CheckSquare, label: 'Задачи' },
+  { to: '/pending',       icon: Bell,        label: 'Pending' },
   { to: '/discovery',     icon: Compass,    label: 'Обзор' },
   { to: '/stats',         icon: TrendingUp, label: 'Stats' },
   { to: '/data-quality',  icon: Activity,   label: 'Data Quality' },
