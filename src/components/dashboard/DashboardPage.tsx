@@ -465,6 +465,103 @@ function CycleWidget() {
   )
 }
 
+// ── Cycle 2 widget ────────────────────────────────────────────────────────────
+
+function CycleTwoWidget() {
+  const [phaseStats, setPhaseStats] = useState<Record<number, { done: number; total: number }>>({})
+  const [blockers, setBlockers] = useState<Task[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([
+      supabase
+        .from('tasks')
+        .select('id, title, status, is_completed, phase_number, work_type')
+        .in('phase_number', [1, 2, 3])
+        .neq('status', 'cancelled'),
+      supabase
+        .from('tasks')
+        .select('id, title, status, work_type, phase_number, priority')
+        .eq('work_type', 'blocker')
+        .eq('status', 'todo'),
+    ]).then(([tasksRes, blockersRes]) => {
+      if (cancelled) return
+      const stats: Record<number, { done: number; total: number }> = {
+        1: { done: 0, total: 0 },
+        2: { done: 0, total: 0 },
+        3: { done: 0, total: 0 },
+      }
+      for (const t of tasksRes.data ?? []) {
+        const p = t.phase_number as number
+        if (p >= 1 && p <= 3) {
+          stats[p].total++
+          if (t.status === 'done' || t.is_completed) stats[p].done++
+        }
+      }
+      setPhaseStats(stats)
+      setBlockers((blockersRes.data ?? []) as Task[])
+      setLoading(false)
+    })
+    return () => { cancelled = true }
+  }, [])
+
+  if (loading) return null
+
+  const total = Object.values(phaseStats).reduce((s, p) => s + p.total, 0)
+  if (total === 0 && blockers.length === 0) return null
+
+  return (
+    <div className="bg-white/5 rounded-2xl px-4 py-4 border border-white/[0.06] space-y-3">
+      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+        🔄 <span className="text-slate-200 normal-case font-semibold">Automation & Quality</span>
+      </p>
+
+      {[1, 2, 3].map(phase => {
+        const { done, total: phaseTotal } = phaseStats[phase] ?? { done: 0, total: 0 }
+        const pct = phaseTotal > 0 ? Math.round(done / phaseTotal * 100) : 0
+        return (
+          <div key={phase} className="space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-400">Phase {phase}</span>
+              {phaseTotal === 0 ? (
+                <span className="text-[10px] text-slate-600">Нет задач</span>
+              ) : (
+                <span className="text-[10px] font-semibold text-slate-300">
+                  {done}/{phaseTotal} · {pct}%
+                </span>
+              )}
+            </div>
+            {phaseTotal > 0 && (
+              <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-purple-500 transition-all"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            )}
+          </div>
+        )
+      })}
+
+      {blockers.length > 0 && (
+        <div className="pt-2 border-t border-white/[0.04] space-y-1.5">
+          <p className="text-[10px] text-red-400 font-semibold uppercase tracking-wider">🚫 Blockers</p>
+          {blockers.map(b => (
+            <div key={b.id} className="flex items-start gap-2">
+              <span className="text-[10px] text-red-500 shrink-0 mt-0.5">●</span>
+              <p className="flex-1 text-xs text-red-300 line-clamp-1">{b.title}</p>
+              {b.phase_number != null && (
+                <span className="text-[9px] text-slate-600 shrink-0">P{b.phase_number}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
@@ -564,6 +661,9 @@ export default function DashboardPage() {
 
         {/* Cycle widget */}
         <CycleWidget />
+
+        {/* Cycle 2 progress */}
+        <CycleTwoWidget />
       </div>
     </div>
   )
