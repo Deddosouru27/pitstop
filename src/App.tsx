@@ -22,6 +22,7 @@ import IdeasTriagePage from './components/triage/IdeasTriagePage'
 import StatsPage from './components/stats/StatsPage'
 import DataQualityPage from './components/data-quality/DataQualityPage'
 import DiscoveryPage from './components/discovery/DiscoveryPage'
+import PendingPage from './components/pending/PendingPage'
 
 function AppShell() {
   const { selectedTaskId, closeTask } = useApp()
@@ -51,6 +52,7 @@ function AppShell() {
           <Route path="/stats" element={<StatsPage />} />
           <Route path="/data-quality" element={<DataQualityPage />} />
           <Route path="/discovery" element={<DiscoveryPage />} />
+          <Route path="/pending" element={<PendingPage />} />
           <Route path="*" element={<Navigate to="/projects" replace />} />
         </Routes>
       </main>
