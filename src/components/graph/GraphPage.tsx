@@ -240,6 +240,8 @@ export default function GraphPage() {
 
   const containerRef = useRef<HTMLDivElement>(null)
   const highlightRef = useRef<(q: string) => void>(() => { /* noop */ })
+  const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null)
+  const svgRef  = useRef<d3.Selection<SVGSVGElement, unknown, null, undefined> | null>(null)
 
   // ── Fetch data from SQL tables ───────────────────────────────────────────────
 
@@ -306,6 +308,8 @@ export default function GraphPage() {
       .scaleExtent([0.1, 5])
       .on('zoom', e => g.attr('transform', e.transform.toString()))
     svg.call(zoom)
+    zoomRef.current = zoom
+    svgRef.current = svg
 
     const total = nodes.length
     const simNodes: EntityNode[] = nodes.map((n, i) => ({
@@ -483,8 +487,28 @@ export default function GraphPage() {
         </div>
       )}
 
-      {/* D3 canvas */}
-      <div ref={containerRef} className="w-full" />
+      {/* D3 canvas + zoom controls */}
+      <div className="relative w-full">
+        <div ref={containerRef} className="w-full" />
+        {!loading && nodes.length > 0 && (
+          <div className="absolute bottom-3 right-3 flex flex-col gap-1">
+            {[
+              { label: '+', title: 'Увеличить',  action: () => { if (svgRef.current && zoomRef.current) (svgRef.current.transition().duration(200) as unknown as d3.Selection<SVGSVGElement, unknown, null, undefined>).call(zoomRef.current.scaleBy as never, 1.2) } },
+              { label: '−', title: 'Уменьшить',  action: () => { if (svgRef.current && zoomRef.current) (svgRef.current.transition().duration(200) as unknown as d3.Selection<SVGSVGElement, unknown, null, undefined>).call(zoomRef.current.scaleBy as never, 0.8) } },
+              { label: '⊡', title: 'Сбросить',   action: () => { if (svgRef.current && zoomRef.current) (svgRef.current.transition().duration(300) as unknown as d3.Selection<SVGSVGElement, unknown, null, undefined>).call(zoomRef.current.transform as never, d3.zoomIdentity) } },
+            ].map(({ label, title, action }) => (
+              <button
+                key={label}
+                onClick={action}
+                title={title}
+                className="w-8 h-8 flex items-center justify-center rounded-lg bg-[#13131a]/90 border border-white/[0.08] text-slate-400 text-sm font-semibold active:bg-white/10 hover:text-slate-200 hover:border-white/20 transition-colors"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       {!loading && nodes.length > 0 && (
         <>
