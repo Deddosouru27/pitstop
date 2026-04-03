@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 
 export interface IdeasHealth {
   total: number
+  active: number
   rejected: number
   hot: number
   convertedToTask: number
@@ -47,7 +48,10 @@ export function useDataQuality() {
       const weekAgoStr = weekAgo.toISOString()
 
       const [
-        ideasAllRes,
+        ideasTotalRes,
+        ideasRejectedRes,
+        ideasActiveRes,
+        ideasHotRes,
         ideasConvertedRes,
         knowledgeTotalRes,
         knowledgeNoClusterRes,
@@ -58,7 +62,10 @@ export function useDataQuality() {
         ingestionFailedRes,
         ingestionWeekRes,
       ] = await Promise.all([
-        supabase.from('ideas').select('relevance, status'),
+        supabase.from('ideas').select('*', { count: 'exact', head: true }),
+        supabase.from('ideas').select('*', { count: 'exact', head: true }).eq('status', 'rejected'),
+        supabase.from('ideas').select('*', { count: 'exact', head: true }).eq('status', 'new'),
+        supabase.from('ideas').select('*', { count: 'exact', head: true }).eq('status', 'new').eq('relevance', 'hot'),
         supabase.from('ideas').select('*', { count: 'exact', head: true }).eq('converted_to_task', true),
         supabase.from('extracted_knowledge').select('*', { count: 'exact', head: true }),
         supabase.from('extracted_knowledge').select('*', { count: 'exact', head: true }).is('knowledge_type', null),
@@ -72,11 +79,10 @@ export function useDataQuality() {
 
       if (cancelled) return
 
-      const ideasAll = ideasAllRes.data ?? []
-      const total = ideasAll.length
-      const rejected = ideasAll.filter(i => i.status === 'dismissed').length
-      const hot = ideasAll.filter(i => i.relevance === 'hot').length
-      const active = total - rejected
+      const total    = ideasTotalRes.count ?? 0
+      const rejected = ideasRejectedRes.count ?? 0
+      const active   = ideasActiveRes.count ?? 0
+      const hot      = ideasHotRes.count ?? 0
       const hotRatio = active > 0 ? Math.round(hot / active * 100) : 0
 
       // Orphan nodes: approximate via node count - nodes that appear in edges
@@ -108,6 +114,7 @@ export function useDataQuality() {
       setData({
         ideas: {
           total,
+          active,
           rejected,
           hot,
           convertedToTask: ideasConvertedRes.count ?? 0,

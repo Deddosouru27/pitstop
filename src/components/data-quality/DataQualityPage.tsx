@@ -76,9 +76,9 @@ function IdeasSection({ d }: { d: IdeasHealth }) {
   return (
     <Section icon="💡" title="Ideas Health" overallLevel={overall}>
       <StatRow label="Всего идей" value={d.total} />
-      <StatRow label="Новых (не rejected)" value={d.total - d.rejected} />
+      <StatRow label="Активных" value={d.active} />
       <StatRow label="Rejected" value={d.rejected} level={d.rejected > d.total * 0.3 ? 'yellow' : 'green'} />
-      <StatRow label="Hot ratio" value={`${d.hot} / ${d.total - d.rejected} = ${d.hotRatio}%`} level={hotLevel} />
+      <StatRow label="Hot ratio" value={`${d.hot} / ${d.active} = ${d.hotRatio}%`} level={hotLevel} />
       <StatRow label="Converted to task" value={d.convertedToTask} level={d.convertedToTask > 0 ? 'green' : 'yellow'} />
     </Section>
   )
