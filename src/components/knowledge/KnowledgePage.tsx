@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { BookOpen, X, ExternalLink, Search, FileText, ChevronDown } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { supabaseMemory } from '../../lib/supabaseMemory'
@@ -67,6 +67,20 @@ function scoreBar(value: number | null, color: string) {
   )
 }
 
+
+/** Split text into segments, wrapping query matches in a highlighted span */
+function highlightText(text: string, query: string): ReactNode {
+  if (!query.trim()) return text
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const regex = new RegExp(`(${escaped})`, 'gi')
+  const parts = text.split(regex)
+  if (parts.length === 1) return text
+  return parts.map((part, idx) =>
+    regex.test(part)
+      ? <span key={idx} className="bg-yellow-500/30 rounded-sm px-0.5">{part}</span>
+      : part
+  )
+}
 
 type SimilarItem = { id: string; content: string; similarity: number; knowledge_type: string | null }
 
@@ -356,10 +370,12 @@ function KnowledgeCard({
   item,
   onOpen,
   onEntityClick,
+  searchQuery = '',
 }: {
   item: ExtractedKnowledge
   onOpen: (i: ExtractedKnowledge) => void
   onEntityClick?: (entity: string) => void
+  searchQuery?: string
 }) {
   const typeColor = (item.knowledge_type && TYPE_COLORS[item.knowledge_type]) ?? 'bg-slate-800 text-slate-400'
   const dateStr = new Date(item.created_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
@@ -371,13 +387,13 @@ function KnowledgeCard({
     >
       {/* Content + date top-right */}
       <div className="flex items-start gap-2">
-        <p className="flex-1 text-slate-100 text-sm leading-relaxed line-clamp-3 overflow-hidden">{item.content}</p>
+        <p className="flex-1 text-slate-100 text-sm leading-relaxed line-clamp-3 overflow-hidden">{highlightText(item.content, searchQuery)}</p>
         <span className="shrink-0 text-[10px] text-slate-600 mt-0.5">{dateStr}</span>
       </div>
 
       {/* business_value */}
       {item.business_value ? (
-        <p className="text-slate-500 text-xs leading-relaxed line-clamp-2">🎯 {item.business_value}</p>
+        <p className="text-slate-500 text-xs leading-relaxed line-clamp-2">🎯 {highlightText(item.business_value!, searchQuery)}</p>
       ) : (
         <p className="text-slate-700 text-xs italic">Появится при следующем анализе</p>
       )}
@@ -581,12 +597,14 @@ function SourceGroupBlock({
   items,
   onOpen,
   onEntityClick,
+  searchQuery = '',
 }: {
   sourceInfo: SourceInfo | null
   fallbackSourceType: string | null
   items: ExtractedKnowledge[]
   onOpen: (i: ExtractedKnowledge) => void
   onEntityClick?: (entity: string) => void
+  searchQuery?: string
 }) {
   const [expanded, setExpanded] = useState(false)
 
@@ -657,7 +675,7 @@ function SourceGroupBlock({
             </div>
           )}
           <div className="p-2 space-y-2">
-            {items.map(i => <KnowledgeCard key={i.id} item={i} onOpen={onOpen} onEntityClick={onEntityClick} />)}
+            {items.map(i => <KnowledgeCard key={i.id} item={i} onOpen={onOpen} onEntityClick={onEntityClick} searchQuery={searchQuery} />)}
           </div>
         </div>
       )}
@@ -867,11 +885,20 @@ export default function KnowledgePage() {
   const [routeFilter, setRouteFilter] = useState<string>('all')
   const [sourceFilter, setSourceFilter] = useState<string>('all')
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [sortBy, setSortBy] = useState<SortKey>('date')
   const [selected, setSelected] = useState<ExtractedKnowledge | null>(null)
   const [groupMode, setGroupMode] = useState(false)
   const [sourceMap, setSourceMap] = useState<Map<string, SourceInfo>>(new Map())
   const [entityFilter, setEntityFilter] = useState<string | null>(null)
+
+  // Debounce search input by 300ms
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => setDebouncedSearch(search), 300)
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+  }, [search])
 
   const topEntities = useMemo(() => {
     const counts = new Map<string, number>()
@@ -926,8 +953,8 @@ export default function KnowledgePage() {
       if (routeFilter === 'archive' && !(routedContains(i.routed_to, 'knowledge_base') && !routedContains(i.routed_to, 'hot_backlog'))) return false
       if (routeFilter === 'discard' && !routedContains(i.routed_to, 'discarded')) return false
       if (sourceFilter !== 'all' && (i.source_type ?? 'text') !== sourceFilter) return false
-      if (search.trim()) {
-        const q = search.toLowerCase()
+      if (debouncedSearch.trim()) {
+        const q = debouncedSearch.toLowerCase()
         const inContent = i.content.toLowerCase().includes(q)
         const inEntities = (i.entities ?? []).some(e => e.toLowerCase().includes(q))
         if (!inContent && !inEntities) return false
@@ -945,7 +972,7 @@ export default function KnowledgePage() {
       result = [...result].sort((a, b) => (a.source_type ?? '').localeCompare(b.source_type ?? ''))
     }
     return result
-  }, [items, typeFilter, routeFilter, sourceFilter, search, sortBy, entityFilter])
+  }, [items, typeFilter, routeFilter, sourceFilter, debouncedSearch, sortBy, entityFilter])
 
   useEffect(() => {
     if (!groupMode) return
@@ -1276,11 +1303,11 @@ export default function KnowledgePage() {
             </p>
           </div>
         ) : !groupMode ? (
-          filtered.map(i => <KnowledgeCard key={i.id} item={i} onOpen={setSelected} onEntityClick={setEntityFilter} />)
+          filtered.map(i => <KnowledgeCard key={i.id} item={i} onOpen={setSelected} onEntityClick={setEntityFilter} searchQuery={debouncedSearch} />)
         ) : (
           groupedFiltered.map(entry => {
             if (entry.kind === 'singleton') {
-              return <KnowledgeCard key={entry.item.id} item={entry.item} onOpen={setSelected} onEntityClick={setEntityFilter} />
+              return <KnowledgeCard key={entry.item.id} item={entry.item} onOpen={setSelected} onEntityClick={setEntityFilter} searchQuery={debouncedSearch} />
             }
             if (entry.kind === 'group') {
               return (
@@ -1291,6 +1318,7 @@ export default function KnowledgePage() {
                   items={entry.items}
                   onOpen={setSelected}
                   onEntityClick={setEntityFilter}
+                  searchQuery={debouncedSearch}
                 />
               )
             }
@@ -1303,6 +1331,7 @@ export default function KnowledgePage() {
                 items={entry.items}
                 onOpen={setSelected}
                 onEntityClick={setEntityFilter}
+                searchQuery={debouncedSearch}
               />
             )
           })
