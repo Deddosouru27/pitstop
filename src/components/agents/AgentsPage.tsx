@@ -15,11 +15,11 @@ function timeAgo(dateStr: string): string {
 // ── Status badge ───────────────────────────────────────────────────────────────
 
 const STATUS_CFG: Record<AgentStatus, { label: string; cls: string; pulse: boolean }> = {
-  idle:    { label: 'Idle',       cls: 'bg-slate-700 text-slate-400',          pulse: false },
-  working: { label: 'Working',    cls: 'bg-emerald-900/60 text-emerald-400',   pulse: true  },
-  stuck:   { label: 'Stuck',      cls: 'bg-yellow-900/50 text-yellow-400',     pulse: false },
-  failed:  { label: 'Failed',     cls: 'bg-red-900/50 text-red-400',           pulse: false },
-  offline: { label: 'Offline',    cls: 'bg-slate-800 text-slate-600',          pulse: false },
+  idle:    { label: 'Свободен',  cls: 'bg-slate-700 text-slate-400',          pulse: false },
+  working: { label: 'Работает',  cls: 'bg-emerald-900/60 text-emerald-400',   pulse: true  },
+  stuck:   { label: 'Застрял',   cls: 'bg-yellow-900/50 text-yellow-400',     pulse: false },
+  failed:  { label: 'Ошибка',    cls: 'bg-red-900/50 text-red-400',           pulse: false },
+  offline: { label: 'Офлайн',    cls: 'bg-slate-800 text-slate-600',          pulse: false },
 }
 
 function StatusBadge({ status }: { status: AgentStatus }) {
@@ -42,7 +42,7 @@ function StatusBadge({ status }: { status: AgentStatus }) {
 const REPO_CFG: Record<string, string> = {
   pitstop:      'bg-purple-900/40 text-purple-400',
   'maos-intake': 'bg-blue-900/40 text-blue-400',
-  'maos-runner': 'bg-amber-900/40 text-amber-400',
+  'maos-runner': 'bg-green-900/40 text-green-400',
   chat:          'bg-cyan-900/40 text-cyan-400',
 }
 
@@ -130,12 +130,18 @@ function SummaryBar({ agents }: { agents: Agent[] }) {
   const active = agents.filter(a => a.status === 'working').length
   const stuck  = agents.filter(a => a.status === 'stuck' || a.status === 'failed').length
 
+  function agentWord(n: number) {
+    if (n % 10 === 1 && n % 100 !== 11) return 'агент'
+    if ([2,3,4].includes(n % 10) && ![12,13,14].includes(n % 100)) return 'агента'
+    return 'агентов'
+  }
+
   return (
     <div className="flex items-center gap-2 text-sm text-slate-400">
-      <span>{agents.length} агента</span>
+      <span>{agents.length} {agentWord(agents.length)}</span>
       <span className="text-slate-700">·</span>
       <span className={active > 0 ? 'text-emerald-400' : 'text-slate-600'}>
-        {active} активны
+        {active} работают
       </span>
       <span className="text-slate-700">·</span>
       <span className={stuck > 0 ? 'text-yellow-400' : 'text-slate-600'}>
