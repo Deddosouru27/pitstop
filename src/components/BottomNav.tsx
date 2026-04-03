@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { FolderOpen, Lightbulb, BookOpen, Network, MoreHorizontal, X, BarChart2, Brain, Target, Inbox, Settings, ScrollText, ListTodo, TrendingUp, Activity, Bot } from 'lucide-react'
+import { FolderOpen, Lightbulb, BookOpen, Network, MoreHorizontal, X, BarChart2, Brain, Target, Inbox, Settings, ScrollText, ListTodo, TrendingUp, Activity, Users } from 'lucide-react'
 import { useNewIdeasCount } from '../hooks/useNewIdeasCount'
 
 const PRIMARY = [
   { to: '/dashboard',  icon: BarChart2,  label: 'Dashboard', badge: false },
   { to: '/knowledge',  icon: BookOpen,   label: 'Knowledge', badge: false },
   { to: '/ideas',      icon: Lightbulb,  label: 'Ideas',     badge: true  },
-  { to: '/graph',      icon: Network,    label: 'Graph',     badge: false },
+  { to: '/agents',     icon: Users,      label: 'Агенты',    badge: false },
   { to: '/projects',   icon: FolderOpen, label: 'Projects',  badge: false },
 ]
 
@@ -15,7 +15,7 @@ const SECONDARY = [
   { to: '/stats',         icon: TrendingUp, label: 'Stats' },
   { to: '/data-quality',  icon: Activity,   label: 'Data Quality' },
   { to: '/memory',        icon: Brain,      label: 'Memory' },
-  { to: '/agents',        icon: Bot,        label: 'Agents' },
+  { to: '/graph',         icon: Network,    label: 'Graph' },
   { to: '/ingested',      icon: Inbox,      label: 'Сырьё' },
   { to: '/intake-logs',   icon: ScrollText, label: 'Intake Logs' },
   { to: '/ideas-triage',  icon: ListTodo,   label: 'Ideas Triage' },

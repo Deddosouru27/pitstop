@@ -16,6 +16,7 @@ import SmokeTestPage from './components/smoke/SmokeTestPage'
 import GraphPage from './components/graph/GraphPage'
 import AgentLogsPage from './components/agent-logs/AgentLogsPage'
 import AgentMonitorPage from './components/agents/AgentMonitorPage'
+import AgentsPage from './components/agents/AgentsPage'
 import IntakeLogsPage from './components/intake-logs/IntakeLogsPage'
 import IdeasTriagePage from './components/triage/IdeasTriagePage'
 import StatsPage from './components/stats/StatsPage'
@@ -42,7 +43,8 @@ function AppShell() {
           <Route path="/smoke-test" element={<SmokeTestPage />} />
           <Route path="/graph" element={<GraphPage />} />
           <Route path="/agent-logs" element={<AgentLogsPage />} />
-          <Route path="/agents" element={<AgentMonitorPage />} />
+          <Route path="/agents" element={<AgentsPage />} />
+          <Route path="/agent-monitor" element={<AgentMonitorPage />} />
           <Route path="/intake-logs" element={<IntakeLogsPage />} />
           <Route path="/ideas-triage" element={<IdeasTriagePage />} />
           <Route path="/stats" element={<StatsPage />} />
