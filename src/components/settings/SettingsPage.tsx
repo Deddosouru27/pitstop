@@ -31,7 +31,7 @@ const LANG_OPTIONS: { value: Language; label: Record<Language, string> }[] = [
 ]
 
 export default function SettingsPage() {
-  const { settings, setLanguage, setNotifications } = useSettings()
+  const { settings, setTheme, setLanguage, setNotifications } = useSettings()
   const lang = settings.language
 
   return (
@@ -55,16 +55,23 @@ export default function SettingsPage() {
             <div className="text-sm font-medium text-slate-200 mb-3">{t('theme', lang)}</div>
             <div className="flex gap-2">
               <button
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium bg-accent text-white"
+                onClick={() => setTheme('dark')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                  settings.theme === 'dark' ? 'bg-accent text-white' : 'bg-surface-el text-slate-400 hover:text-slate-200'
+                }`}
               >
                 <Moon size={16} />
                 {t('themeDark', lang)}
               </button>
-              <div className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium bg-surface-el text-slate-600 relative cursor-not-allowed">
+              <button
+                onClick={() => setTheme('light')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                  settings.theme === 'light' ? 'bg-accent text-white' : 'bg-surface-el text-slate-400 hover:text-slate-200'
+                }`}
+              >
                 <Sun size={16} />
                 {t('themeLight', lang)}
-                <span className="absolute -top-1.5 -right-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-700 text-slate-400">Soon</span>
-              </div>
+              </button>
             </div>
           </div>
 
