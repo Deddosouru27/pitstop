@@ -18,6 +18,50 @@ const CONTEXT_FIELDS: { key: keyof TaskContext; label: string }[] = [
   { key: 'scope', label: 'SCOPE' },
 ]
 
+const COMPLETENESS_FIELDS: { key: string; label: string }[] = [
+  { key: 'goal',         label: 'Цель' },
+  { key: 'risks',        label: 'Риски' },
+  { key: 'scope',        label: 'Scope' },
+  { key: 'done_criteria', label: 'Готово когда' },
+  { key: 'origin',       label: 'Источник' },
+]
+
+function ContextCompletenessScore({ context }: { context?: TaskContext | null }) {
+  if (!context) return null
+
+  const ctx = context as Record<string, unknown>
+  const filled = COMPLETENESS_FIELDS.filter(f => {
+    const v = ctx[f.key]
+    return v && typeof v === 'string' && v.trim().length > 0
+  })
+  const score = Math.round((filled.length / COMPLETENESS_FIELDS.length) * 100)
+  const gaps = COMPLETENESS_FIELDS.filter(f => {
+    const v = ctx[f.key]
+    return !v || typeof v !== 'string' || !v.trim()
+  })
+
+  const barColor = score === 100 ? 'bg-green-500' : score >= 60 ? 'bg-accent' : 'bg-amber-500'
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-slate-500">Контекст</span>
+        <span className={`text-xs font-medium ${score === 100 ? 'text-green-400' : score >= 60 ? 'text-accent' : 'text-amber-400'}`}>
+          {score}%
+        </span>
+      </div>
+      <div className="h-1 bg-surface rounded-full overflow-hidden">
+        <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${score}%` }} />
+      </div>
+      {score === 100 ? (
+        <p className="text-[11px] text-green-400">✓ Контекст полный</p>
+      ) : (
+        <p className="text-[11px] text-slate-500">❌ Не заполнено: {gaps.map(g => g.label).join(', ')}</p>
+      )}
+    </div>
+  )
+}
+
 function TaskContextBlock({ context }: { context?: TaskContext | null }) {
   if (!context || Object.keys(context).length === 0) {
     return (
@@ -174,6 +218,9 @@ export default function TaskDetail({ taskId, onClose }: Props) {
               </p>
             )}
           </div>
+
+          {/* Context completeness */}
+          <ContextCompletenessScore context={task.context} />
 
           {/* Context JSONB */}
           <TaskContextBlock context={task.context} />

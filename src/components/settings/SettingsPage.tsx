@@ -1,4 +1,4 @@
-import { Settings, Sun, Moon, Globe, Bell, BellOff } from 'lucide-react'
+import { Settings, Sun, Moon, Globe, Bell, BellOff, ExternalLink, Database, Cpu, Link2 } from 'lucide-react'
 import { useSettings } from '../../hooks/useSettings'
 import type { Language } from '../../types'
 
@@ -16,6 +16,9 @@ const LABELS: Record<string, Record<Language, string>> = {
   notifDesc:     { ru: 'Получать уведомления о задачах и обновлениях', en: 'Receive notifications about tasks and updates' },
   general:       { ru: 'Основные', en: 'General' },
   version:       { ru: 'Версия', en: 'Version' },
+  systemInfo:    { ru: 'Системная информация', en: 'System Info' },
+  autorun:       { ru: 'Автозапуск', en: 'Autorun' },
+  quickLinks:    { ru: 'Быстрые ссылки', en: 'Quick Links' },
 }
 
 function t(key: string, lang: Language): string {
@@ -126,7 +129,7 @@ export default function SettingsPage() {
       </section>
 
       {/* General section */}
-      <section>
+      <section className="mb-6">
         <h2 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3 px-1">
           {t('general', lang)}
         </h2>
@@ -135,6 +138,89 @@ export default function SettingsPage() {
             <span className="text-sm text-slate-400">{t('version', lang)}</span>
             <span className="text-sm text-slate-500">1.0.0</span>
           </div>
+        </div>
+      </section>
+
+      {/* System Info section */}
+      <section className="mb-6">
+        <h2 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3 px-1">
+          {t('systemInfo', lang)}
+        </h2>
+        <div className="bg-surface rounded-2xl overflow-hidden divide-y divide-white/[0.06]">
+          <div className="flex items-center gap-3 px-4 py-3.5">
+            <Database size={16} className="text-slate-500 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="text-xs text-slate-500">Supabase Pitstop</div>
+              <div className="text-sm text-slate-300 font-mono">stqhnkhc••••••••</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 px-4 py-3.5">
+            <Link2 size={16} className="text-slate-500 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="text-xs text-slate-500">Intake URL</div>
+              <div className="text-sm text-slate-300 font-mono truncate">maos-intake.vercel.app</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 px-4 py-3.5">
+            <Cpu size={16} className="text-slate-500 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="text-xs text-slate-500">Runner</div>
+              <div className="text-sm text-slate-300">local WSL</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Autorun Config section */}
+      <section className="mb-6">
+        <h2 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3 px-1">
+          {t('autorun', lang)}
+        </h2>
+        <div className="bg-surface rounded-2xl overflow-hidden divide-y divide-white/[0.06]">
+          <div className="flex items-center justify-between px-4 py-3">
+            <span className="text-sm text-slate-400">{lang === 'ru' ? 'Интервал heartbeat' : 'Heartbeat interval'}</span>
+            <span className="text-sm text-slate-300">6 {lang === 'ru' ? 'часов' : 'hours'}</span>
+          </div>
+          <div className="flex items-center justify-between px-4 py-3">
+            <span className="text-sm text-slate-400">{lang === 'ru' ? 'Задач за запуск' : 'Max tasks per run'}</span>
+            <span className="text-sm text-slate-300">3</span>
+          </div>
+          <div className="flex items-center justify-between px-4 py-3">
+            <span className="text-sm text-slate-400">{lang === 'ru' ? 'Фильтр фаз' : 'Phase filter'}</span>
+            <span className="text-sm text-slate-300 font-mono text-xs">phase = current</span>
+          </div>
+          <div className="flex items-center justify-between px-4 py-3">
+            <span className="text-sm text-slate-400">{lang === 'ru' ? 'Статус' : 'Status'}</span>
+            <span className="text-xs font-medium text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-2 py-1">
+              ⚠️ {lang === 'ru' ? 'На паузе' : 'Paused'}
+            </span>
+          </div>
+        </div>
+      </section>
+
+      {/* Quick Links section */}
+      <section>
+        <h2 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3 px-1">
+          {t('quickLinks', lang)}
+        </h2>
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            { label: 'Pitstop Vercel', href: 'https://pitstop.vercel.app' },
+            { label: 'Intake Vercel', href: 'https://maos-intake.vercel.app' },
+            { label: 'Supabase Pitstop', href: 'https://supabase.com/dashboard/project/stqhnkhcfndmhgvfyojv' },
+            { label: 'GitHub', href: 'https://github.com' },
+          ].map(({ label, href }) => (
+            <a
+              key={label}
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-between gap-2 bg-surface px-4 py-3 rounded-2xl text-sm text-slate-300 hover:text-slate-100 active:bg-surface-el transition-colors"
+            >
+              <span>{label}</span>
+              <ExternalLink size={14} className="text-slate-500 shrink-0" />
+            </a>
+          ))}
         </div>
       </section>
     </div>
