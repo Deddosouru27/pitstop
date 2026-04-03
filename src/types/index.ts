@@ -126,6 +126,8 @@ export interface Idea {
   relevance?: string | null
   extracted_ideas?: string[] | null
   rejection_reason?: string | null
+  reviewed_by?: string | null
+  reviewed_at?: string | null
   created_at: string
 }
 

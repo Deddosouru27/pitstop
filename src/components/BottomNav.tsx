@@ -1,10 +1,11 @@
 import { NavLink } from 'react-router-dom'
-import { FolderOpen, Lightbulb, BarChart2, Brain, BookOpen, Target, Inbox, Settings, Network, Bot, ScrollText } from 'lucide-react'
+import { FolderOpen, Lightbulb, BarChart2, Brain, BookOpen, Target, Inbox, Settings, Network, Bot, ScrollText, ListTodo } from 'lucide-react'
 import { useNewIdeasCount } from '../hooks/useNewIdeasCount'
 
 const tabs = [
   { to: '/projects',   icon: FolderOpen, label: 'Projects',  badge: false },
   { to: '/ideas',      icon: Lightbulb,  label: 'Ideas',     badge: true  },
+  { to: '/ideas-triage', icon: ListTodo, label: 'Triage',   badge: false },
   { to: '/dashboard',  icon: BarChart2,  label: 'Stats',     badge: false },
   { to: '/memory',     icon: Brain,      label: 'Memory',    badge: false },
   { to: '/knowledge',  icon: BookOpen,   label: 'Knowledge', badge: false },
