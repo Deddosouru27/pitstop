@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react'
-import { BookOpen, X, ExternalLink, Search, FileText, ChevronDown } from 'lucide-react'
+import { BookOpen, X, ExternalLink, Search, FileText, ChevronDown, Download } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { supabaseMemory } from '../../lib/supabaseMemory'
 import { useExtractedKnowledge } from '../../hooks/useExtractedKnowledge'
@@ -986,6 +986,59 @@ export default function KnowledgePage() {
   const [sortBy, setSortBy] = useState<SortKey>('date')
   const [selected, setSelected] = useState<ExtractedKnowledge | null>(null)
   const [groupMode, setGroupMode] = useState<'none' | 'source' | 'type'>('none')
+  const [exporting, setExporting] = useState(false)
+
+  const handleExport = async () => {
+    setExporting(true)
+    try {
+      const { data } = await supabase
+        .from('extracted_knowledge')
+        .select('content,knowledge_type,source_url,source_type,created_at')
+        .neq('event_type', 'SUPERSEDED')
+        .order('knowledge_type', { ascending: true })
+        .order('created_at', { ascending: false })
+
+      const rows = data ?? []
+      const today = new Date().toLocaleDateString('ru-RU')
+      const lines: string[] = [
+        '# MAOS Knowledge Export',
+        `Дата: ${today}`,
+        `Всего: ${rows.length} знаний`,
+        '',
+        '---',
+        '',
+      ]
+
+      // Group by knowledge_type
+      const groups = new Map<string, typeof rows>()
+      for (const row of rows) {
+        const key = (row.knowledge_type as string | null) ?? 'Без категории'
+        if (!groups.has(key)) groups.set(key, [])
+        groups.get(key)!.push(row)
+      }
+
+      for (const [type, group] of groups) {
+        lines.push(`## ${type}`, '')
+        for (const item of group) {
+          const content = item.content as string
+          const title = content.slice(0, 60).replace(/\n/g, ' ')
+          const source = (item.source_url as string | null) ?? (item.source_type as string | null) ?? '—'
+          const date = new Date(item.created_at as string).toLocaleDateString('ru-RU')
+          lines.push(`### ${title}`, content, `Source: ${source}`, `Date: ${date}`, '', '---', '')
+        }
+      }
+
+      const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `knowledge-export-${new Date().toISOString().slice(0, 10)}.md`
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setExporting(false)
+    }
+  }
   const [sourceMap, setSourceMap] = useState<Map<string, SourceInfo>>(new Map())
   const [entityFilter, setEntityFilter] = useState<string | null>(null)
 
@@ -1192,6 +1245,16 @@ export default function KnowledgePage() {
               }`}
             >
               {groupMode === 'none' ? '📦 Группы' : groupMode === 'source' ? '📦 По источнику' : '🏷 По типу'}
+            </button>
+          )}
+          {pageTab === 'knowledge' && (
+            <button
+              onClick={handleExport}
+              disabled={exporting}
+              className="flex items-center gap-1.5 bg-white/5 active:bg-white/10 border border-white/[0.06] text-slate-400 hover:text-slate-200 text-xs font-medium px-3 py-2 rounded-xl transition-colors disabled:opacity-40"
+            >
+              <Download size={13} />
+              {exporting ? '...' : 'MD'}
             </button>
           )}
           <button
