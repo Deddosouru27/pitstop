@@ -119,7 +119,7 @@ export interface Idea {
   category: string
   ai_category: string
   converted_to_task: boolean
-  status?: 'pending' | 'accepted' | 'dismissed' | 'deferred' | null
+  status?: 'new' | 'pending' | 'accepted' | 'dismissed' | 'rejected' | 'deferred' | null
   summary?: string | null
   source?: string | null
   source_type?: string | null

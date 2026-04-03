@@ -4,9 +4,9 @@ import type { Idea } from '../types'
 
 export type TriageRelevance = 'all' | 'hot' | 'strategic'
 
-// Only show new/pending ideas — already reviewed ones are excluded
+// Show unreviewed ideas — null, pending, or new
 function isPending(idea: Idea): boolean {
-  return !idea.status || idea.status === 'pending'
+  return !idea.status || idea.status === 'pending' || idea.status === 'new'
 }
 
 export function useIdeasTriage() {
@@ -16,19 +16,13 @@ export function useIdeasTriage() {
 
   const fetchPending = useCallback(async () => {
     setLoading(true)
-    const [pendingRes, reviewedRes] = await Promise.all([
-      supabase
-        .from('ideas')
-        .select('*')
-        .or('status.is.null,status.eq.pending')
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('ideas')
-        .select('*', { count: 'exact', head: true })
-        .not('status', 'in', '("pending")'),
-    ])
-    if (pendingRes.data) setIdeas(pendingRes.data)
-    setTotalReviewed(reviewedRes.count ?? 0)
+    const { data } = await supabase
+      .from('ideas')
+      .select('*')
+      .or('status.is.null,status.eq.pending,status.eq.new')
+      .order('created_at', { ascending: false })
+    if (data) setIdeas(data)
+    // session counter stays at 0 — it only increments when the user acts
     setLoading(false)
   }, [])
 
@@ -45,14 +39,13 @@ export function useIdeasTriage() {
   }, [])
 
   const defer = useCallback(async (id: string) => {
-    // Move to end of queue in UI only — mark deferred in DB
     setIdeas(prev => {
       const idx = prev.findIndex(i => i.id === id)
       if (idx === -1) return prev
       const item = prev[idx]
-      const next = [...prev.slice(0, idx), ...prev.slice(idx + 1), item]
-      return next
+      return [...prev.slice(0, idx), ...prev.slice(idx + 1), item]
     })
+    setTotalReviewed(n => n + 1)
     await supabase.from('ideas').update({ status: 'deferred' }).eq('id', id)
   }, [])
 
