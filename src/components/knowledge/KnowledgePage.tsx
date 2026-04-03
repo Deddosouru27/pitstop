@@ -960,6 +960,16 @@ function PasteModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: ()
 
 type SortKey = 'date' | 'date_asc' | 'immediate' | 'strategic' | 'source'
 type PageTab = 'knowledge' | 'guides'
+type DatePreset = 'today' | '7d' | '30d' | 'all'
+
+function datePresetStart(preset: DatePreset): Date | null {
+  if (preset === 'all') return null
+  const d = new Date()
+  if (preset === 'today') { d.setHours(0, 0, 0, 0); return d }
+  if (preset === '7d')  { d.setDate(d.getDate() - 7); return d }
+  if (preset === '30d') { d.setDate(d.getDate() - 30); return d }
+  return null
+}
 
 export default function KnowledgePage() {
   const { items, loading, error, refresh } = useExtractedKnowledge()
@@ -969,6 +979,7 @@ export default function KnowledgePage() {
   const [typeFilter, setTypeFilter] = useState<string>('all')
   const [routeFilter, setRouteFilter] = useState<string>('all')
   const [sourceFilter, setSourceFilter] = useState<string>('all')
+  const [datePreset, setDatePreset] = useState<DatePreset>('all')
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -1031,13 +1042,14 @@ export default function KnowledgePage() {
   }, [items])
 
   const filtered = useMemo(() => {
+    const dateStart = datePresetStart(datePreset)
     let result = items.filter(i => {
-
       if (typeFilter !== 'all' && i.knowledge_type !== typeFilter) return false
       if (routeFilter === 'hot' && !routedContains(i.routed_to, 'hot_backlog')) return false
       if (routeFilter === 'archive' && !(routedContains(i.routed_to, 'knowledge_base') && !routedContains(i.routed_to, 'hot_backlog'))) return false
       if (routeFilter === 'discard' && !routedContains(i.routed_to, 'discarded')) return false
       if (sourceFilter !== 'all' && (i.source_type ?? 'text') !== sourceFilter) return false
+      if (dateStart && new Date(i.created_at) < dateStart) return false
       if (debouncedSearch.trim()) {
         const q = debouncedSearch.toLowerCase()
         const inContent = i.content.toLowerCase().includes(q)
@@ -1057,7 +1069,7 @@ export default function KnowledgePage() {
       result = [...result].sort((a, b) => (a.source_type ?? '').localeCompare(b.source_type ?? ''))
     }
     return result
-  }, [items, typeFilter, routeFilter, sourceFilter, debouncedSearch, sortBy, entityFilter])
+  }, [items, typeFilter, routeFilter, sourceFilter, datePreset, debouncedSearch, sortBy, entityFilter])
 
   useEffect(() => {
     if (groupMode !== 'source') return
@@ -1275,6 +1287,26 @@ export default function KnowledgePage() {
           <option value="strategic">Strategic ↓</option>
           <option value="source">По типу</option>
         </select>
+      </div>
+
+      {/* Date preset filter */}
+      <div className="px-4 pb-2 flex gap-2">
+        {([
+          { key: 'all',   label: 'Всё время' },
+          { key: 'today', label: 'Сегодня'   },
+          { key: '7d',    label: '7 дней'    },
+          { key: '30d',   label: '30 дней'   },
+        ] as const).map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setDatePreset(key)}
+            className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
+              datePreset === key ? 'bg-purple-600 text-white' : 'bg-white/5 text-slate-400 active:bg-white/10'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {/* Entity cloud */}
