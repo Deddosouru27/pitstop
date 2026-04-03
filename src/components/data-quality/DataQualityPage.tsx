@@ -32,10 +32,22 @@ function valueCls(level: HealthLevel) {
 
 // ── Stat row ──────────────────────────────────────────────────────────────────
 
-function StatRow({ label, value, level }: { label: string; value: string | number; level?: HealthLevel }) {
+function StatRow({
+  label, value, level, tooltip,
+}: {
+  label: string
+  value: string | number
+  level?: HealthLevel
+  tooltip?: string
+}) {
   return (
     <div className="flex items-center gap-2 py-1.5 border-t border-white/[0.04] first:border-0">
-      <p className="flex-1 text-xs text-slate-400">{label}</p>
+      <p
+        className={`flex-1 text-xs text-slate-400 ${tooltip ? 'underline decoration-dotted decoration-slate-600 cursor-help' : ''}`}
+        title={tooltip}
+      >
+        {label}
+      </p>
       <p className={`text-xs font-semibold ${level ? valueCls(level) : 'text-slate-200'}`}>
         {value}
       </p>
@@ -74,12 +86,17 @@ function IdeasSection({ d }: { d: IdeasHealth }) {
   const hotLevel: HealthLevel = d.hotRatio > 50 ? 'red' : d.hotRatio > 40 ? 'yellow' : 'green'
   const overall: HealthLevel = hotLevel === 'red' ? 'red' : hotLevel === 'yellow' ? 'yellow' : 'green'
   return (
-    <Section icon="💡" title="Ideas Health" overallLevel={overall}>
+    <Section icon="💡" title="Идеи" overallLevel={overall}>
       <StatRow label="Всего идей" value={d.total} />
-      <StatRow label="Активных" value={d.active} />
-      <StatRow label="Rejected" value={d.rejected} level={d.rejected > d.total * 0.3 ? 'yellow' : 'green'} />
-      <StatRow label="Hot ratio" value={`${d.hot} / ${d.active} = ${d.hotRatio}%`} level={hotLevel} />
-      <StatRow label="Converted to task" value={d.convertedToTask} level={d.convertedToTask > 0 ? 'green' : 'yellow'} />
+      <StatRow label="Активных (не разобрано)" value={d.active} />
+      <StatRow label="Отклонено" value={d.rejected} level={d.rejected > d.total * 0.3 ? 'yellow' : 'green'} />
+      <StatRow
+        label="Доля горящих"
+        value={`${d.hot} / ${d.active} = ${d.hotRatio}%`}
+        level={hotLevel}
+        tooltip="Идеи с высоким приоритетом. Норма < 40%"
+      />
+      <StatRow label="Превращено в задачи" value={d.convertedToTask} level={d.convertedToTask > 0 ? 'green' : 'yellow'} />
     </Section>
   )
 }
@@ -93,10 +110,20 @@ function KnowledgeSection({ d }: { d: KnowledgeHealth }) {
   const lowLevel: HealthLevel = lowPct > 40 ? 'red' : lowPct > 20 ? 'yellow' : 'green'
   const overall: HealthLevel = clusterLevel === 'red' || lowLevel === 'red' ? 'red' : clusterLevel === 'yellow' || lowLevel === 'yellow' ? 'yellow' : 'green'
   return (
-    <Section icon="🧠" title="Knowledge Health" overallLevel={overall}>
+    <Section icon="🧠" title="База знаний" overallLevel={overall}>
       <StatRow label="Всего знаний" value={d.total} />
-      <StatRow label="Без кластера" value={`${d.withoutCluster} (${clusterPct}%)`} level={clusterLevel} />
-      <StatRow label="Score < 5" value={`${d.lowScore} (${lowPct}%)`} level={lowLevel} />
+      <StatRow
+        label="Без темы"
+        value={`${d.withoutCluster} (${clusterPct}%)`}
+        level={clusterLevel}
+        tooltip="Знания которые система не смогла отнести к теме"
+      />
+      <StatRow
+        label="Без оценки важности"
+        value={`${d.lowScore} (${lowPct}%)`}
+        level={lowLevel}
+        tooltip="Знания у которых нет оценки насколько они важны прямо сейчас. Это нормально — оценка проставляется при поиске."
+      />
     </Section>
   )
 }
@@ -108,11 +135,25 @@ function EntitySection({ d }: { d: EntityHealth }) {
   const orphanLevel: HealthLevel = orphanPct > 30 ? 'red' : orphanPct > 10 ? 'yellow' : 'green'
   const overall: HealthLevel = d.nodes === 0 ? 'yellow' : orphanLevel
   return (
-    <Section icon="🕸" title="Entity Graph Health" overallLevel={overall}>
-      <StatRow label="Nodes" value={d.nodes} level={d.nodes > 0 ? 'green' : 'yellow'} />
-      <StatRow label="Edges" value={d.edges} />
-      <StatRow label="Avg connections" value={d.nodes > 0 ? ((d.edges * 2) / d.nodes).toFixed(1) : '—'} />
-      <StatRow label="Orphan nodes" value={`${d.orphanNodes} (${orphanPct}%)`} level={orphanLevel} />
+    <Section icon="🕸" title="Граф связей" overallLevel={overall}>
+      <StatRow
+        label="Сущности"
+        value={d.nodes}
+        level={d.nodes > 0 ? 'green' : 'yellow'}
+        tooltip="Люди, технологии, проекты упомянутые в знаниях"
+      />
+      <StatRow
+        label="Связи"
+        value={d.edges}
+        tooltip="Как сущности связаны между собой"
+      />
+      <StatRow label="Среднее связей на сущность" value={d.nodes > 0 ? ((d.edges * 2) / d.nodes).toFixed(1) : '—'} />
+      <StatRow
+        label="Одиночки"
+        value={`${d.orphanNodes} (${orphanPct}%)`}
+        level={orphanLevel}
+        tooltip="Сущности без единой связи. Небольшое количество — норма."
+      />
     </Section>
   )
 }
@@ -127,7 +168,7 @@ function IngestionSection({ d }: { d: IngestionHealth }) {
   const failLevel: HealthLevel = d.failedCount > 5 ? 'red' : d.failedCount > 0 ? 'yellow' : 'green'
   const overall: HealthLevel = freshLevel === 'red' || failLevel === 'red' ? 'red' : freshLevel === 'yellow' || failLevel === 'yellow' ? 'yellow' : 'green'
   return (
-    <Section icon="📥" title="Ingestion Health" overallLevel={overall}>
+    <Section icon="📥" title="Входящие данные" overallLevel={overall}>
       <StatRow label="Последнее" value={d.lastIngestedAt ? timeAgo(d.lastIngestedAt) : '—'} level={freshLevel} />
       <StatRow label="Ошибок" value={d.failedCount} level={failLevel} />
       <StatRow label="За 7 дней" value={d.thisWeekCount} level={d.thisWeekCount > 0 ? 'green' : 'yellow'} />
@@ -142,12 +183,15 @@ export default function DataQualityPage() {
 
   return (
     <div className="flex flex-col min-h-full pb-8">
-      <div className="px-4 pt-6 pb-4">
+      <div className="px-4 pt-6 pb-3">
         <div className="flex items-center gap-2">
           <Activity size={20} className="text-purple-400" strokeWidth={1.75} />
           <h1 className="text-2xl font-bold text-slate-100">Data Quality</h1>
         </div>
         <p className="text-sm text-slate-500 mt-0.5">Мониторинг здоровья данных MAOS Brain</p>
+        <p className="text-xs text-slate-600 mt-2">
+          🟢 Норма · 🟡 Требует внимания · 🔴 Проблема
+        </p>
       </div>
 
       {loading ? (
