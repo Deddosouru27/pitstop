@@ -27,6 +27,12 @@ interface KnowledgeItem {
   knowledge_type: string | null
 }
 
+interface EdgeInfo {
+  otherId: string
+  otherName: string
+  relationship: string | null
+}
+
 // ── Visual helpers ────────────────────────────────────────────────────────────
 
 const TYPE_COLOR: Record<string, string> = {
@@ -53,37 +59,58 @@ function nodeR(count: number, maxCount: number): number {
 
 // ── Node detail panel ─────────────────────────────────────────────────────────
 
-function NodePanel({ node, neighbors, onClose, onSelectNode }: {
+function NodePanel({ node, nodeById, onClose, onSelectNode }: {
   node: EntityNode
-  neighbors: EntityNode[]
+  nodeById: Map<string, EntityNode>
   onClose: () => void
   onSelectNode: (n: EntityNode) => void
 }) {
+  const [edgeInfos, setEdgeInfos] = useState<EdgeInfo[]>([])
   const [knowledge, setKnowledge] = useState<KnowledgeItem[] | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [knowledgeLoading, setKnowledgeLoading] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
+    setEdgeInfos([])
     setKnowledge(null)
     setExpandedId(null)
+
+    // Fetch edges with relationship label
+    supabase
+      .from('entity_edges')
+      .select('source_id, target_id, relationship')
+      .or(`source_id.eq.${node.id},target_id.eq.${node.id}`)
+      .limit(10)
+      .then(({ data }) => {
+        if (cancelled) return
+        const infos: EdgeInfo[] = (data ?? []).map(e => {
+          const otherId = e.source_id === node.id ? e.target_id : e.source_id
+          const other = nodeById.get(otherId as string)
+          return {
+            otherId: otherId as string,
+            otherName: other?.name ?? '…',
+            relationship: (e.relationship as string | null) ?? null,
+          }
+        })
+        setEdgeInfos(infos)
+      })
+
+    // Fetch linked knowledge items
+    setKnowledgeLoading(true)
     supabase
       .from('knowledge_entities')
       .select('knowledge_id, extracted_knowledge(content, source_type, knowledge_type)')
       .eq('entity_id', node.id)
-      .limit(10)
+      .limit(8)
       .then(({ data }) => {
         if (cancelled) return
         const items: KnowledgeItem[] = (data ?? []).map((row: {
           knowledge_id: string
-          // Supabase returns joined rows as array or object depending on relation type
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           extracted_knowledge: any
         }) => {
-          const ek = Array.isArray(row.extracted_knowledge)
-            ? row.extracted_knowledge[0]
-            : row.extracted_knowledge
+          const ek = Array.isArray(row.extracted_knowledge) ? row.extracted_knowledge[0] : row.extracted_knowledge
           return {
             knowledge_id: row.knowledge_id,
             content: ek?.content ?? '',
@@ -92,73 +119,85 @@ function NodePanel({ node, neighbors, onClose, onSelectNode }: {
           }
         }).filter(i => i.content)
         setKnowledge(items)
-        setLoading(false)
+        setKnowledgeLoading(false)
       })
+
     return () => { cancelled = true }
   }, [node.id])
 
-  const typeLabel = node.type ?? 'entity'
   const typeCls = TYPE_CLS[node.type] ?? 'bg-slate-800 text-slate-400'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/60" />
-      <div
-        className="relative w-full bg-[#13131a] rounded-t-3xl max-h-[80dvh] flex flex-col shadow-2xl"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex justify-center pt-3 pb-1 shrink-0">
-          <div className="w-10 h-1 bg-white/20 rounded-full" />
-        </div>
+    <>
+      {/* Backdrop */}
+      <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} />
 
+      {/* Panel */}
+      <div className="fixed right-0 top-0 z-50 h-dvh w-72 bg-[#13131a] border-l border-white/[0.06] flex flex-col shadow-2xl animate-slide-right">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 shrink-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="w-3 h-3 rounded-full shrink-0" style={{ background: entityColor(node.type) }} />
-            <p className="text-slate-100 font-semibold text-base">{node.name}</p>
-            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${typeCls}`}>
-              {typeLabel}
-            </span>
-            <span className="text-[11px] text-slate-500 px-2 py-0.5 bg-white/5 rounded-full">
-              {node.count} упом.
-            </span>
+        <div className="flex items-start justify-between px-4 pt-5 pb-4 border-b border-white/[0.06] shrink-0">
+          <div className="space-y-1.5 min-w-0 flex-1 pr-2">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: entityColor(node.type) }} />
+              <p className="text-lg font-bold text-slate-100 leading-tight truncate">{node.name}</p>
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${typeCls}`}>
+                {node.type ?? 'entity'}
+              </span>
+              <span className="text-[10px] text-slate-600 bg-white/[0.04] px-2 py-0.5 rounded-full">
+                {node.count} упом.
+              </span>
+            </div>
           </div>
-          <button onClick={onClose} className="text-slate-500 active:text-slate-300 shrink-0">
-            <X size={20} />
+          <button onClick={onClose} className="text-slate-500 active:text-slate-300 shrink-0 mt-0.5">
+            <X size={18} />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 pb-8 space-y-4">
-          {/* Connected entities */}
-          {neighbors.length > 0 && (
-            <div>
-              <p className="text-[10px] text-slate-500 uppercase tracking-wider font-medium mb-2">
-                Связанные ({neighbors.length})
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {neighbors.map(n => (
-                  <button
-                    key={n.id}
-                    onClick={() => onSelectNode(n)}
-                    className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-white/5 border border-white/[0.06] text-slate-300 active:bg-white/10 transition-colors"
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: entityColor(n.type) }} />
-                    {n.name}
-                    <span className="text-[9px] text-slate-600">{n.count}</span>
-                  </button>
-                ))}
+        <div className="flex-1 overflow-y-auto">
+          {/* Connections */}
+          <div className="px-4 py-3 border-b border-white/[0.04]">
+            <p className="text-[10px] text-slate-500 uppercase tracking-wider font-medium mb-2">
+              Связи {edgeInfos.length > 0 ? `(${edgeInfos.length})` : ''}
+            </p>
+            {edgeInfos.length === 0 ? (
+              <p className="text-xs text-slate-700 italic">Нет связей</p>
+            ) : (
+              <div className="space-y-1">
+                {edgeInfos.map(e => {
+                  const other = nodeById.get(e.otherId)
+                  return (
+                    <button
+                      key={e.otherId}
+                      onClick={() => other && onSelectNode(other)}
+                      disabled={!other}
+                      className="w-full text-left flex items-center gap-2 py-1.5 px-2 rounded-xl hover:bg-white/5 active:bg-white/10 transition-colors disabled:opacity-40 group"
+                    >
+                      {other && (
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: entityColor(other.type) }} />
+                      )}
+                      <span className="text-xs text-slate-300 flex-1 truncate group-hover:text-slate-100">{e.otherName}</span>
+                      {e.relationship && (
+                        <span className="text-[9px] text-slate-600 bg-white/[0.04] px-1.5 py-0.5 rounded-full shrink-0">
+                          {e.relationship}
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Knowledge */}
-          <div>
+          <div className="px-4 py-3">
             <p className="text-[10px] text-slate-500 uppercase tracking-wider font-medium mb-2">Знания</p>
-            {loading && <p className="text-xs text-slate-600">Загрузка...</p>}
-            {!loading && knowledge?.length === 0 && (
-              <p className="text-xs text-slate-600 italic">Знаний не найдено</p>
+            {knowledgeLoading && <p className="text-xs text-slate-700">Загрузка...</p>}
+            {!knowledgeLoading && knowledge?.length === 0 && (
+              <p className="text-xs text-slate-700 italic">Не найдено</p>
             )}
-            {!loading && knowledge && knowledge.length > 0 && (
+            {!knowledgeLoading && knowledge && knowledge.length > 0 && (
               <div className="space-y-2">
                 {knowledge.map(item => {
                   const isExpanded = expandedId === item.knowledge_id
@@ -166,13 +205,13 @@ function NodePanel({ node, neighbors, onClose, onSelectNode }: {
                     <button
                       key={item.knowledge_id}
                       onClick={() => setExpandedId(isExpanded ? null : item.knowledge_id)}
-                      className="w-full text-left bg-white/[0.04] rounded-xl px-3 py-2.5 border border-white/[0.06] space-y-1.5 active:bg-white/[0.07] transition-colors"
+                      className="w-full text-left bg-white/[0.04] rounded-xl px-3 py-2 border border-white/[0.06] space-y-1 active:bg-white/[0.07]"
                     >
-                      <p className={`text-sm text-slate-200 leading-relaxed ${isExpanded ? '' : 'line-clamp-2'}`}>
+                      <p className={`text-xs text-slate-300 leading-relaxed ${isExpanded ? '' : 'line-clamp-2'}`}>
                         {item.content}
                       </p>
                       {item.knowledge_type && (
-                        <span className="text-[10px] text-purple-400 bg-purple-900/40 px-1.5 py-0.5 rounded-full">
+                        <span className="text-[9px] text-purple-400 bg-purple-900/30 px-1.5 py-0.5 rounded-full">
                           {item.knowledge_type}
                         </span>
                       )}
@@ -184,7 +223,7 @@ function NodePanel({ node, neighbors, onClose, onSelectNode }: {
           </div>
         </div>
       </div>
-    </div>
+    </>
   )
 }
 
@@ -241,22 +280,7 @@ export default function GraphPage() {
     [nodes],
   )
 
-  const adjacency = useMemo(() => {
-    const adj = new Map<string, Set<string>>()
-    for (const e of edges) {
-      if (!adj.has(e.source_id)) adj.set(e.source_id, new Set())
-      if (!adj.has(e.target_id)) adj.set(e.target_id, new Set())
-      adj.get(e.source_id)!.add(e.target_id)
-      adj.get(e.target_id)!.add(e.source_id)
-    }
-    return adj
-  }, [edges])
 
-  const selectedNeighbors = useMemo(() => {
-    if (!selectedNode) return []
-    const ids = adjacency.get(selectedNode.id) ?? new Set<string>()
-    return [...ids].map(id => nodeById.get(id)).filter((n): n is EntityNode => !!n)
-  }, [selectedNode, adjacency, nodeById])
 
   // ── D3 visualization ─────────────────────────────────────────────────────────
 
@@ -487,7 +511,7 @@ export default function GraphPage() {
       {selectedNode && (
         <NodePanel
           node={selectedNode}
-          neighbors={selectedNeighbors}
+          nodeById={nodeById}
           onClose={() => setSelectedNode(null)}
           onSelectNode={n => setSelectedNode(n)}
         />
