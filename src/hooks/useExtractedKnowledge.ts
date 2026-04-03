@@ -17,8 +17,8 @@ export function useExtractedKnowledge() {
     async function load() {
       setLoading(true)
       const [mainRes, embRes] = await Promise.all([
-        supabase.from('extracted_knowledge').select(FIELDS).order('created_at', { ascending: false }),
-        supabase.from('extracted_knowledge').select('id').not('embedding', 'is', null),
+        supabase.from('extracted_knowledge').select(FIELDS).neq('event_type', 'SUPERSEDED').order('created_at', { ascending: false }),
+        supabase.from('extracted_knowledge').select('id').not('embedding', 'is', null).neq('event_type', 'SUPERSEDED'),
       ])
 
       if (cancelled) return
