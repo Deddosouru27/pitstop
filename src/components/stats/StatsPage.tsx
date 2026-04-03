@@ -137,7 +137,7 @@ function EntityStatsCards({ stats }: { stats: EntityStats }) {
   const cards = [
     { label: 'Сущностей', value: stats.nodes, icon: '🕸' },
     { label: 'Связей', value: stats.edges, icon: '🔗' },
-    { label: 'Средних связей', value: stats.avgConnections, icon: '📊' },
+    { label: 'Среднее связей', value: stats.avgConnections, icon: '📊' },
   ]
   return (
     <div className="grid grid-cols-3 gap-2">
