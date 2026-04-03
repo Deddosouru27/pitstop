@@ -72,6 +72,17 @@ export interface Project {
   updated_at: string
 }
 
+export interface TaskContext {
+  what?: string | null
+  why?: string | null
+  goal?: string | null
+  scope?: string | null
+  done_criteria?: string | null
+  acceptance?: string | null
+  risks?: string | null
+  dependencies?: string | null
+}
+
 export interface Task {
   id: string
   title: string
@@ -87,6 +98,7 @@ export interface Task {
   work_type?: string | null
   created_by?: string
   assignee?: string | null
+  context?: TaskContext | null
   created_at: string
   updated_at: string
   completed_at: string | null

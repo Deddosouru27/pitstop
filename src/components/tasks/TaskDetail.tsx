@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { X, Trash2, Plus } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
 import { useSubtasks } from '../../hooks/useSubtasks'
-import type { Priority } from '../../types'
+import type { Priority, TaskContext } from '../../types'
 
 const PRIORITIES: { value: Priority; label: string; activeClass: string }[] = [
   { value: 'none', label: 'None', activeClass: 'bg-slate-600 text-slate-100' },
@@ -10,6 +10,63 @@ const PRIORITIES: { value: Priority; label: string; activeClass: string }[] = [
   { value: 'medium', label: 'Medium', activeClass: 'bg-warning text-black' },
   { value: 'high', label: 'High', activeClass: 'bg-danger text-white' },
 ]
+
+const CONTEXT_FIELDS: { key: keyof TaskContext; label: string }[] = [
+  { key: 'what', label: 'ЧТО' },
+  { key: 'why', label: 'ЗАЧЕМ' },
+  { key: 'goal', label: 'ЦЕЛЬ' },
+  { key: 'scope', label: 'SCOPE' },
+]
+
+function TaskContextBlock({ context }: { context?: TaskContext | null }) {
+  if (!context || Object.keys(context).length === 0) {
+    return (
+      <p className="text-xs text-slate-600">Контекст не заполнен</p>
+    )
+  }
+
+  const doneCriteria = context.done_criteria || context.acceptance
+  const hasAnyField = CONTEXT_FIELDS.some(f => context[f.key]) || doneCriteria || context.risks || context.dependencies
+
+  if (!hasAnyField) {
+    return (
+      <p className="text-xs text-slate-600">Контекст не заполнен</p>
+    )
+  }
+
+  return (
+    <div className="space-y-1.5">
+      {CONTEXT_FIELDS.map(({ key, label }) => {
+        const value = context[key]
+        if (!value) return null
+        return (
+          <div key={key}>
+            <span className="text-[11px] text-slate-500 uppercase">{label}</span>
+            <p className="text-sm text-slate-100 whitespace-pre-wrap break-words">{value}</p>
+          </div>
+        )
+      })}
+      {doneCriteria && (
+        <div>
+          <span className="text-[11px] text-slate-500 uppercase">ГОТОВО КОГДА</span>
+          <p className="text-sm text-slate-100 whitespace-pre-wrap break-words">{doneCriteria}</p>
+        </div>
+      )}
+      {context.risks && (
+        <div>
+          <span className="text-[11px] text-slate-500 uppercase">РИСКИ</span>
+          <p className="text-sm text-slate-100 whitespace-pre-wrap break-words">{context.risks}</p>
+        </div>
+      )}
+      {context.dependencies && (
+        <div>
+          <span className="text-[11px] text-slate-500 uppercase">ЗАВИСИМОСТИ</span>
+          <p className="text-sm text-slate-100 whitespace-pre-wrap break-words">{context.dependencies}</p>
+        </div>
+      )}
+    </div>
+  )
+}
 
 interface Props {
   taskId: string
@@ -117,6 +174,9 @@ export default function TaskDetail({ taskId, onClose }: Props) {
               </p>
             )}
           </div>
+
+          {/* Context JSONB */}
+          <TaskContextBlock context={task.context} />
 
           {/* Priority chips */}
           <div className="space-y-1.5">
