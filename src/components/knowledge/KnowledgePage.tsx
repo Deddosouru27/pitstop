@@ -855,7 +855,7 @@ function PasteModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: ()
   )
 }
 
-type SortKey = 'date' | 'immediate' | 'strategic'
+type SortKey = 'date' | 'date_asc' | 'immediate' | 'strategic' | 'source'
 type PageTab = 'knowledge' | 'guides'
 
 export default function KnowledgePage() {
@@ -939,6 +939,10 @@ export default function KnowledgePage() {
       result = [...result].sort((a, b) => (b.immediate_relevance ?? 0) - (a.immediate_relevance ?? 0))
     } else if (sortBy === 'strategic') {
       result = [...result].sort((a, b) => (b.strategic_relevance ?? 0) - (a.strategic_relevance ?? 0))
+    } else if (sortBy === 'date_asc') {
+      result = [...result].sort((a, b) => a.created_at.localeCompare(b.created_at))
+    } else if (sortBy === 'source') {
+      result = [...result].sort((a, b) => (a.source_type ?? '').localeCompare(b.source_type ?? ''))
     }
     return result
   }, [items, typeFilter, routeFilter, sourceFilter, search, sortBy, entityFilter])
@@ -1135,9 +1139,11 @@ export default function KnowledgePage() {
           onChange={e => setSortBy(e.target.value as SortKey)}
           className="bg-white/5 border border-white/[0.06] rounded-xl px-3 py-2 text-xs text-slate-400 outline-none"
         >
-          <option value="date">По дате</option>
-          <option value="immediate">По immediate</option>
-          <option value="strategic">По strategic</option>
+          <option value="date">По дате ↓</option>
+          <option value="date_asc">По дате ↑</option>
+          <option value="immediate">Immediate ↓</option>
+          <option value="strategic">Strategic ↓</option>
+          <option value="source">По типу</option>
         </select>
       </div>
 
