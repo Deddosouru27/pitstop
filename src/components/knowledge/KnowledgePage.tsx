@@ -584,6 +584,43 @@ function GuidesTab() {
   )
 }
 
+// ── TypeGroupBlock ────────────────────────────────────────────────────────────
+
+function TypeGroupBlock({
+  label,
+  items,
+  onOpen,
+  onEntityClick,
+}: {
+  label: string
+  items: ExtractedKnowledge[]
+  onOpen: (i: ExtractedKnowledge) => void
+  onEntityClick?: (entity: string) => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  return (
+    <div className="border border-white/[0.06] rounded-2xl overflow-hidden">
+      <button
+        onClick={() => setExpanded(v => !v)}
+        className="w-full px-4 py-3 bg-white/[0.03] active:bg-white/[0.07] text-left transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <span className="flex-1 text-sm font-semibold text-slate-200 truncate">{label}</span>
+          <span className="text-[10px] text-slate-500 bg-white/5 px-2 py-0.5 rounded-full">{items.length}</span>
+          <ChevronDown size={14} className={`text-slate-600 transition-transform shrink-0 ${expanded ? 'rotate-180' : ''}`} />
+        </div>
+      </button>
+      {expanded && (
+        <div className="divide-y divide-white/[0.04]">
+          {items.map(i => (
+            <KnowledgeCard key={i.id} item={i} onOpen={onOpen} onEntityClick={onEntityClick} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 interface SourceInfo {
   title: string | null
   summary: string | null
@@ -889,7 +926,7 @@ export default function KnowledgePage() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [sortBy, setSortBy] = useState<SortKey>('date')
   const [selected, setSelected] = useState<ExtractedKnowledge | null>(null)
-  const [groupMode, setGroupMode] = useState(false)
+  const [groupMode, setGroupMode] = useState<'none' | 'source' | 'type'>('none')
   const [sourceMap, setSourceMap] = useState<Map<string, SourceInfo>>(new Map())
   const [entityFilter, setEntityFilter] = useState<string | null>(null)
 
@@ -975,7 +1012,7 @@ export default function KnowledgePage() {
   }, [items, typeFilter, routeFilter, sourceFilter, debouncedSearch, sortBy, entityFilter])
 
   useEffect(() => {
-    if (!groupMode) return
+    if (groupMode !== 'source') return
     const ids = [...new Set(
       filtered.map(i => i.ingested_content_id).filter((id): id is string => !!id)
     )]
@@ -1046,6 +1083,24 @@ export default function KnowledgePage() {
     return result
   }, [filtered])
 
+  // Group by knowledge_type (topic_cluster)
+  const groupedByType = useMemo(() => {
+    const map = new Map<string, ExtractedKnowledge[]>()
+    for (const item of filtered) {
+      const key = item.knowledge_type ?? '__none__'
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(item)
+    }
+    return Array.from(map.entries())
+      .sort((a, b) => b[1].length - a[1].length)
+      .map(([key, typeItems]) => ({
+        key,
+        label: key === '__none__' ? 'Без категории' : key,
+        items: typeItems,
+      }))
+  }, [filtered])
+
+
   if (loading) {
     return <div className="flex items-center justify-center h-48 text-slate-500 text-sm">Loading...</div>
   }
@@ -1069,14 +1124,14 @@ export default function KnowledgePage() {
           <h1 className="flex-1 text-2xl font-bold text-slate-100">Knowledge</h1>
           {pageTab === 'knowledge' && (
             <button
-              onClick={() => setGroupMode(v => !v)}
+              onClick={() => setGroupMode(m => m === 'none' ? 'source' : m === 'source' ? 'type' : 'none')}
               className={`text-xs font-medium px-3 py-2 rounded-xl transition-colors border ${
-                groupMode
+                groupMode !== 'none'
                   ? 'bg-purple-600/20 border-purple-500/40 text-purple-300'
                   : 'bg-white/5 border-white/[0.06] text-slate-400'
               }`}
             >
-              📦 Группы
+              {groupMode === 'none' ? '📦 Группы' : groupMode === 'source' ? '📦 По источнику' : '🏷 По типу'}
             </button>
           )}
           <button
@@ -1302,8 +1357,18 @@ export default function KnowledgePage() {
               {items.length === 0 ? 'Запусти /autorun чтобы система начала извлекать знания' : 'Попробуй другой фильтр'}
             </p>
           </div>
-        ) : !groupMode ? (
+        ) : groupMode === 'none' ? (
           filtered.map(i => <KnowledgeCard key={i.id} item={i} onOpen={setSelected} onEntityClick={setEntityFilter} searchQuery={debouncedSearch} />)
+        ) : groupMode === 'type' ? (
+          groupedByType.map(g => (
+            <TypeGroupBlock
+              key={g.key}
+              label={g.label}
+              items={g.items}
+              onOpen={setSelected}
+              onEntityClick={setEntityFilter}
+            />
+          ))
         ) : (
           groupedFiltered.map(entry => {
             if (entry.kind === 'singleton') {

@@ -76,7 +76,7 @@ function IngestedModal({ item, onClose }: { item: IngestedContent; onClose: () =
           {item.routing_result && (
             <div>
               <p className="text-[10px] text-slate-500 uppercase tracking-wider font-medium mb-1">Routing</p>
-              <p className="text-slate-400 text-xs">{formatRouting(item.routing_result)}</p>
+              <p className="text-slate-400 text-xs">{formatRouting(typeof item.routing_result === 'string' ? null : item.routing_result)}</p>
             </div>
           )}
 
