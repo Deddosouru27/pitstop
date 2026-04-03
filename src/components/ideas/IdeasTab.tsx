@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Lightbulb, ChevronDown, CheckSquare, Square, X, Users } from 'lucide-react'
+import { Lightbulb, CheckSquare, Square, X } from 'lucide-react'
 import { useAllIdeas } from '../../hooks/useAllIdeas'
 import { useApp } from '../../context/AppContext'
 import IdeaDetailModal from './IdeaDetailModal'
@@ -25,76 +25,72 @@ const SOURCE_TYPE_CFG: Record<string, { label: string; cls: string }> = {
   'manual-paste': { label: '📋 Paste',    cls: 'bg-slate-800 text-slate-400' },
 }
 
-type StatusTab = 'pending' | 'accepted' | 'dismissed' | 'deferred'
-type GroupMode = 'none' | 'source' | 'category'
+type StatusFilter = 'new' | 'approved' | 'rejected' | 'deferred'
+type RelevanceFilter = 'all' | 'hot' | 'strategic'
 
-const STATUS_TABS: { key: StatusTab; label: string }[] = [
-  { key: 'pending',   label: 'Новые' },
-  { key: 'accepted',  label: 'В работу' },
-  { key: 'deferred',  label: 'Позже' },
-  { key: 'dismissed', label: 'Отклонённые' },
+const STATUS_TABS: { key: StatusFilter; label: string }[] = [
+  { key: 'new',      label: 'Новые' },
+  { key: 'approved', label: 'Approved' },
+  { key: 'deferred', label: 'Позже' },
+  { key: 'rejected', label: 'Rejected' },
 ]
-
-const CATEGORY_CHIPS = ['all', 'feature', 'ux', 'marketing', 'bug', 'other'] as const
-type CategoryChip = typeof CATEGORY_CHIPS[number]
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function ideaStatus(idea: Idea): StatusTab {
+function ideaMatchesStatus(idea: Idea, filter: StatusFilter): boolean {
   const s = idea.status
-  if (s === 'accepted' || s === 'dismissed' || s === 'deferred') return s
-  return 'pending'
-}
-
-function sourceLabel(source: string | null | undefined): string {
-  if (!source) return 'Без источника'
-  try {
-    const url = new URL(source)
-    const host = url.hostname.replace(/^www\./, '')
-    if (host.includes('instagram.com')) {
-      const m = url.pathname.match(/\/([^/?#]+)/)
-      return m ? `Instagram @${m[1]}` : 'Instagram'
-    }
-    if (host.includes('youtube.com') || host === 'youtu.be') return 'YouTube'
-    if (host.includes('t.me') || host.includes('telegram')) {
-      const m = url.pathname.match(/\/([^/?#]+)/)
-      return m ? `Telegram @${m[1]}` : 'Telegram'
-    }
-    return host
-  } catch {
-    return source.length > 40 ? source.slice(0, 40) + '…' : source
+  switch (filter) {
+    case 'new':      return !s || s === 'pending'
+    case 'approved': return s === 'accepted'
+    case 'rejected': return s === 'dismissed'
+    case 'deferred': return s === 'deferred'
   }
 }
 
-function groupKey(idea: Idea, mode: GroupMode): string {
-  if (mode === 'source') return idea.source ?? '__none__'
-  if (mode === 'category') return idea.ai_category || 'other'
-  return '__all__'
-}
+// ── RejectModal ───────────────────────────────────────────────────────────────
 
-function groupLabel(key: string, mode: GroupMode): string {
-  if (mode === 'source') {
-    if (key === '__none__') return 'Без источника'
-    return sourceLabel(key)
-  }
-  if (mode === 'category') {
-    if (!key || key === 'other') return 'Other'
-    return key.charAt(0).toUpperCase() + key.slice(1)
-  }
-  return 'Все'
+function RejectModal({ count, onConfirm, onCancel }: {
+  count: number
+  onConfirm: (reason: string) => void
+  onCancel: () => void
+}) {
+  const [reason, setReason] = useState('')
+  const noun = count === 1 ? 'идею' : count < 5 ? 'идеи' : 'идей'
+  return (
+    <div className="fixed inset-0 z-50 flex items-end" onClick={onCancel}>
+      <div className="absolute inset-0 bg-black/60" />
+      <div className="relative w-full bg-[#13131a] rounded-t-3xl shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1 bg-white/20 rounded-full" />
+        </div>
+        <div className="flex items-center justify-between px-5 py-3">
+          <p className="text-slate-200 text-sm font-semibold">Отклонить {count} {noun}</p>
+          <button onClick={onCancel} className="text-slate-500 active:text-slate-300"><X size={20} /></button>
+        </div>
+        <div className="px-5 pb-8 space-y-3">
+          <textarea
+            value={reason}
+            onChange={e => setReason(e.target.value)}
+            placeholder="Причина отклонения (необязательно)..."
+            className="w-full bg-white/5 border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-slate-200 placeholder-slate-600 resize-none outline-none focus:border-purple-500/50 h-24"
+          />
+          <div className="flex gap-3">
+            <button onClick={onCancel} className="flex-1 py-3 rounded-2xl bg-white/5 text-slate-400 text-sm font-medium active:bg-white/10">
+              Отмена
+            </button>
+            <button onClick={() => onConfirm(reason)} className="flex-1 py-3 rounded-2xl bg-red-600/20 text-red-400 text-sm font-semibold active:bg-red-600/30">
+              🗑 Отклонить
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // ── IdeaCard ──────────────────────────────────────────────────────────────────
 
-function IdeaCard({
-  idea,
-  projectName,
-  projectColor,
-  selected,
-  selectMode,
-  onOpen,
-  onToggleSelect,
-}: {
+function IdeaCard({ idea, projectName, projectColor, selected, selectMode, onOpen, onToggleSelect }: {
   idea: Idea
   projectName: string | undefined
   projectColor: string | undefined
@@ -107,18 +103,11 @@ function IdeaCard({
   const title = idea.summary?.trim()
     || (idea.content.length > 80 ? idea.content.slice(0, 80) + '…' : idea.content)
 
-  function handleClick() {
-    if (selectMode) onToggleSelect(idea.id)
-    else onOpen(idea)
-  }
-
   return (
     <button
-      onClick={handleClick}
+      onClick={() => selectMode ? onToggleSelect(idea.id) : onOpen(idea)}
       className={`w-full text-left rounded-2xl p-3.5 space-y-2 border transition-all active:opacity-70 ${
-        selected
-          ? 'bg-purple-600/15 border-purple-500/40'
-          : 'bg-white/5 border-white/[0.06]'
+        selected ? 'bg-purple-600/15 border-purple-500/40' : 'bg-white/5 border-white/[0.06]'
       }`}
     >
       <div className="flex items-start gap-2.5">
@@ -131,8 +120,13 @@ function IdeaCard({
       </div>
       <div className="flex items-center gap-2 flex-wrap">
         {idea.relevance === 'hot' && (
-          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-600/30 text-purple-300 border border-purple-500/30">
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-orange-900/40 text-orange-300 border border-orange-700/30">
             🔥 Hot
+          </span>
+        )}
+        {idea.relevance === 'strategic' && (
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-900/40 text-blue-300">
+            📐 Strategic
           </span>
         )}
         {idea.source_type && (() => {
@@ -149,6 +143,11 @@ function IdeaCard({
             Converted
           </span>
         )}
+        {idea.rejection_reason && (
+          <span className="text-[10px] text-slate-500 italic truncate max-w-[160px]">
+            ✗ {idea.rejection_reason}
+          </span>
+        )}
         {projectName && (
           <div className="flex items-center gap-1 ml-auto text-[10px] text-slate-500">
             {projectColor && <span className="w-1.5 h-1.5 rounded-full" style={{ background: projectColor }} />}
@@ -160,76 +159,14 @@ function IdeaCard({
   )
 }
 
-// ── Group block ───────────────────────────────────────────────────────────────
+// ── BulkBar ───────────────────────────────────────────────────────────────────
 
-function GroupBlock({
-  label,
-  ideas,
-  projectMap,
-  selectedIds,
-  selectMode,
-  onOpen,
-  onToggleSelect,
-}: {
-  label: string
-  ideas: Idea[]
-  projectMap: Map<string, { name: string; color: string }>
-  selectedIds: Set<string>
-  selectMode: boolean
-  onOpen: (idea: Idea) => void
-  onToggleSelect: (id: string) => void
-}) {
-  const [open, setOpen] = useState(true)
-
-  return (
-    <div className="space-y-1">
-      <button
-        onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center gap-2 px-1 py-1 active:opacity-70"
-      >
-        <ChevronDown size={13} className={`text-slate-600 transition-transform shrink-0 ${open ? '' : '-rotate-90'}`} />
-        <span className="text-xs text-slate-400 font-medium flex-1 text-left truncate">{label}</span>
-        <span className="text-[10px] text-slate-600">{ideas.length}</span>
-      </button>
-      {open && (
-        <div className="space-y-1.5 pl-0">
-          {ideas.map(idea => {
-            const proj = projectMap.get(idea.project_id)
-            return (
-              <IdeaCard
-                key={idea.id}
-                idea={idea}
-                projectName={proj?.name}
-                projectColor={proj?.color}
-                selected={selectedIds.has(idea.id)}
-                selectMode={selectMode}
-                onOpen={onOpen}
-                onToggleSelect={onToggleSelect}
-              />
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── Bulk action bar ───────────────────────────────────────────────────────────
-
-function BulkBar({
-  count,
-  total,
-  onAccept,
-  onDefer,
-  onDismiss,
-  onSelectAll,
-  onClear,
-}: {
+function BulkBar({ count, total, onApprove, onReject, onConvert, onSelectAll, onClear }: {
   count: number
   total: number
-  onAccept: () => void
-  onDefer: () => void
-  onDismiss: () => void
+  onApprove: () => void
+  onReject: () => void
+  onConvert: () => void
   onSelectAll: () => void
   onClear: () => void
 }) {
@@ -252,22 +189,23 @@ function BulkBar({
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={onAccept}
+            onClick={onApprove}
             className="flex-1 text-xs font-medium py-2 rounded-xl bg-emerald-600/20 text-emerald-400 active:bg-emerald-600/30 transition-colors"
           >
-            ✅ Принять
+            ✅ Approve
           </button>
           <button
-            onClick={onDefer}
-            className="flex-1 text-xs font-medium py-2 rounded-xl bg-amber-600/20 text-amber-400 active:bg-amber-600/30 transition-colors"
-          >
-            📌 Позже
-          </button>
-          <button
-            onClick={onDismiss}
+            onClick={onReject}
             className="flex-1 text-xs font-medium py-2 rounded-xl bg-red-600/20 text-red-400 active:bg-red-600/30 transition-colors"
           >
-            🗑 Отклонить
+            🗑 Reject
+          </button>
+          <button
+            onClick={onConvert}
+            disabled={count !== 1}
+            className="flex-1 text-xs font-medium py-2 rounded-xl bg-blue-600/20 text-blue-400 active:bg-blue-600/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            🔄 В задачу
           </button>
         </div>
       </div>
@@ -278,14 +216,15 @@ function BulkBar({
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function IdeasTab() {
-  const { ideas, loading, markConverted, deleteIdea, updateStatus } = useAllIdeas()
+  const { ideas, loading, markConverted, deleteIdea, updateStatus, rejectIdeas } = useAllIdeas()
   const { projects } = useApp()
-  const [statusTab, setStatusTab] = useState<StatusTab>('pending')
-  const [catFilter, setCatFilter] = useState<CategoryChip>('all')
-  const [groupMode, setGroupMode] = useState<GroupMode>('none')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('new')
+  const [relevanceFilter, setRelevanceFilter] = useState<RelevanceFilter>('all')
+  const [sourceTypeFilter, setSourceTypeFilter] = useState<string>('all')
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [selectedIdea, setSelectedIdea] = useState<Idea | null>(null)
+  const [rejectModalOpen, setRejectModalOpen] = useState(false)
 
   const projectMap = useMemo(() => {
     const m = new Map<string, { name: string; color: string }>()
@@ -293,42 +232,36 @@ export default function IdeasTab() {
     return m
   }, [projects])
 
-  // Counts per status tab (ignoring category filter)
   const statusCounts = useMemo(() => {
-    const counts: Record<StatusTab, number> = { pending: 0, accepted: 0, dismissed: 0, deferred: 0 }
-    for (const idea of ideas) counts[ideaStatus(idea)]++
+    const counts: Record<StatusFilter, number> = { new: 0, approved: 0, rejected: 0, deferred: 0 }
+    const keys: StatusFilter[] = ['new', 'approved', 'rejected', 'deferred']
+    for (const idea of ideas) {
+      for (const key of keys) {
+        if (ideaMatchesStatus(idea, key)) { counts[key]++; break }
+      }
+    }
     return counts
   }, [ideas])
 
-  // Filtered by status + category
+  const sourceTypes = useMemo(() => {
+    const seen = new Set<string>()
+    for (const idea of ideas) if (idea.source_type) seen.add(idea.source_type)
+    return Array.from(seen).sort()
+  }, [ideas])
+
   const filtered = useMemo(() => {
     return ideas.filter(idea => {
-      if (ideaStatus(idea) !== statusTab) return false
-      if (catFilter !== 'all' && idea.ai_category !== catFilter) return false
+      if (!ideaMatchesStatus(idea, statusFilter)) return false
+      if (relevanceFilter !== 'all' && idea.relevance !== relevanceFilter) return false
+      if (sourceTypeFilter !== 'all' && idea.source_type !== sourceTypeFilter) return false
       return true
     })
-  }, [ideas, statusTab, catFilter])
-
-  // Grouped
-  const groups = useMemo(() => {
-    if (groupMode === 'none') return [{ key: '__all__', label: 'Все', items: filtered }]
-    const map = new Map<string, Idea[]>()
-    for (const idea of filtered) {
-      const k = groupKey(idea, groupMode)
-      const arr = map.get(k) ?? []
-      arr.push(idea)
-      map.set(k, arr)
-    }
-    return Array.from(map.entries())
-      .sort((a, b) => b[1].length - a[1].length)
-      .map(([k, items]) => ({ key: k, label: groupLabel(k, groupMode), items }))
-  }, [filtered, groupMode])
+  }, [ideas, statusFilter, relevanceFilter, sourceTypeFilter])
 
   function toggleSelect(id: string) {
     setSelectedIds(prev => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+      if (next.has(id)) next.delete(id); else next.add(id)
       return next
     })
   }
@@ -342,42 +275,36 @@ export default function IdeasTab() {
     setSelectedIds(new Set(filtered.map(i => i.id)))
   }
 
-  async function bulkAccept() {
-    const selectedIdeas = filtered.filter(i => selectedIds.has(i.id))
-    const ids = selectedIdeas.map(i => i.id)
-    exitSelectMode()
-    await updateStatus(ids, 'accepted')
-    await Promise.all(
-      selectedIdeas.map(idea =>
-        supabase.from('tasks').insert({
-          title: idea.summary?.trim() || idea.content.slice(0, 80),
-          description: idea.content,
-          project_id: idea.project_id ?? null,
-          priority: 'medium',
-          due_date: null,
-          status: 'todo',
-          is_completed: false,
-        })
-      )
-    )
-    await Promise.all(ids.map(id => markConverted(id)))
-  }
-
-  async function bulkAction(status: 'dismissed' | 'deferred') {
+  async function handleApprove() {
     const ids = Array.from(selectedIds)
     exitSelectMode()
-    await updateStatus(ids, status)
+    await updateStatus(ids, 'accepted')
   }
 
-  function cycleGroupMode() {
-    setGroupMode(prev => {
-      if (prev === 'none') return 'source'
-      if (prev === 'source') return 'category'
-      return 'none'
+  async function handleRejectConfirm(reason: string) {
+    const ids = Array.from(selectedIds)
+    setRejectModalOpen(false)
+    exitSelectMode()
+    await rejectIdeas(ids, reason || undefined)
+  }
+
+  async function handleConvertSingle() {
+    const id = Array.from(selectedIds)[0]
+    const idea = ideas.find(i => i.id === id)
+    if (!idea) return
+    exitSelectMode()
+    await supabase.from('tasks').insert({
+      title: idea.summary?.trim() || idea.content.slice(0, 80),
+      description: idea.content,
+      project_id: idea.project_id ?? null,
+      priority: 'medium',
+      due_date: null,
+      status: 'todo',
+      is_completed: false,
     })
+    await updateStatus([id], 'accepted')
+    await markConverted(id)
   }
-
-  const groupModeLabel = groupMode === 'none' ? 'Группировка' : groupMode === 'source' ? 'По источнику' : 'По категории'
 
   if (loading) {
     return <div className="flex items-center justify-center h-48 text-slate-500 text-sm">Loading...</div>
@@ -390,17 +317,7 @@ export default function IdeasTab() {
         <div className="flex items-center gap-2">
           <Lightbulb size={20} className="text-purple-400" strokeWidth={1.75} />
           <h1 className="flex-1 text-2xl font-bold text-slate-100">Ideas</h1>
-          <button
-            onClick={cycleGroupMode}
-            className={`text-xs px-2.5 py-1.5 rounded-xl border transition-colors ${
-              groupMode !== 'none'
-                ? 'bg-purple-600/20 border-purple-500/40 text-purple-300'
-                : 'bg-white/5 border-white/[0.06] text-slate-500'
-            }`}
-          >
-            <Users size={13} className="inline mr-1" />
-            {groupModeLabel}
-          </button>
+          <span className="text-xs text-slate-600">{ideas.length}</span>
           {selectMode ? (
             <button
               onClick={exitSelectMode}
@@ -424,78 +341,93 @@ export default function IdeasTab() {
         {STATUS_TABS.map(tab => (
           <button
             key={tab.key}
-            onClick={() => { setStatusTab(tab.key); exitSelectMode() }}
+            onClick={() => { setStatusFilter(tab.key); exitSelectMode() }}
             className={`shrink-0 flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
-              statusTab === tab.key
+              statusFilter === tab.key
                 ? 'bg-purple-600 text-white'
                 : 'bg-white/5 text-slate-400 active:bg-white/10'
             }`}
           >
             {tab.label}
             <span className={`text-[10px] rounded-full px-1.5 py-0.5 font-semibold ${
-              statusTab === tab.key ? 'bg-white/20 text-white' : 'bg-white/5 text-slate-500'
-            }`}>
-              {statusCounts[tab.key]}
-            </span>
+              statusFilter === tab.key ? 'bg-white/20 text-white' : 'bg-white/5 text-slate-500'
+            }`}>{statusCounts[tab.key]}</span>
           </button>
         ))}
       </div>
 
-      {/* Category chips */}
-      <div className="px-4 pb-3 flex gap-1.5 overflow-x-auto scrollbar-hide">
-        {CATEGORY_CHIPS.map(cat => (
+      {/* Relevance filter */}
+      <div className="px-4 pb-2 flex gap-1.5 overflow-x-auto scrollbar-hide">
+        {(['all', 'hot', 'strategic'] as RelevanceFilter[]).map(r => (
           <button
-            key={cat}
-            onClick={() => setCatFilter(cat)}
+            key={r}
+            onClick={() => setRelevanceFilter(r)}
             className={`shrink-0 text-xs font-medium px-3 py-1 rounded-full transition-colors ${
-              catFilter === cat
+              relevanceFilter === r
                 ? 'bg-white/15 text-slate-200'
                 : 'bg-white/5 text-slate-500 active:bg-white/10'
             }`}
           >
-            {cat === 'all' ? 'Все категории' : cat.charAt(0).toUpperCase() + cat.slice(1)}
+            {r === 'all' ? 'Все' : r === 'hot' ? '🔥 Hot' : '📐 Strategic'}
           </button>
         ))}
       </div>
 
+      {/* Source type filter */}
+      {sourceTypes.length > 0 && (
+        <div className="px-4 pb-3 flex gap-1.5 overflow-x-auto scrollbar-hide">
+          <button
+            onClick={() => setSourceTypeFilter('all')}
+            className={`shrink-0 text-xs font-medium px-3 py-1 rounded-full transition-colors ${
+              sourceTypeFilter === 'all'
+                ? 'bg-white/15 text-slate-200'
+                : 'bg-white/5 text-slate-500 active:bg-white/10'
+            }`}
+          >
+            Все источники
+          </button>
+          {sourceTypes.map(st => {
+            const cfg = SOURCE_TYPE_CFG[st] ?? { label: st, cls: '' }
+            return (
+              <button
+                key={st}
+                onClick={() => setSourceTypeFilter(st)}
+                className={`shrink-0 text-xs font-medium px-3 py-1 rounded-full transition-colors ${
+                  sourceTypeFilter === st
+                    ? 'bg-white/15 text-slate-200'
+                    : 'bg-white/5 text-slate-500 active:bg-white/10'
+                }`}
+              >
+                {cfg.label}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
       {/* List */}
-      <div className="px-4 space-y-4 flex-1">
+      <div className="px-4 space-y-1.5 flex-1">
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center py-16 text-slate-600">
             <Lightbulb size={32} strokeWidth={1.5} className="mb-3 opacity-40" />
             <p className="text-sm">Идей нет</p>
           </div>
-        ) : groupMode === 'none' ? (
-          <div className="space-y-1.5">
-            {filtered.map(idea => {
-              const proj = projectMap.get(idea.project_id)
-              return (
-                <IdeaCard
-                  key={idea.id}
-                  idea={idea}
-                  projectName={proj?.name}
-                  projectColor={proj?.color}
-                  selected={selectedIds.has(idea.id)}
-                  selectMode={selectMode}
-                  onOpen={setSelectedIdea}
-                  onToggleSelect={toggleSelect}
-                />
-              )
-            })}
-          </div>
         ) : (
-          groups.map(g => (
-            <GroupBlock
-              key={g.key}
-              label={`${g.label} (${g.items.length})`}
-              ideas={g.items}
-              projectMap={projectMap}
-              selectedIds={selectedIds}
-              selectMode={selectMode}
-              onOpen={setSelectedIdea}
-              onToggleSelect={toggleSelect}
-            />
-          ))
+          filtered.map(idea => {
+            const proj = projectMap.get(idea.project_id)
+            return (
+              <IdeaCard
+                key={idea.id}
+                idea={idea}
+                projectName={proj?.name}
+                projectColor={proj?.color}
+                selected={selectedIds.has(idea.id)}
+                selectMode={selectMode}
+                onOpen={setSelectedIdea}
+                onToggleSelect={toggleSelect}
+              />
+            )
+          })
         )}
       </div>
 
@@ -504,11 +436,20 @@ export default function IdeasTab() {
         <BulkBar
           count={selectedIds.size}
           total={filtered.length}
-          onAccept={bulkAccept}
-          onDefer={() => bulkAction('deferred')}
-          onDismiss={() => bulkAction('dismissed')}
+          onApprove={handleApprove}
+          onReject={() => setRejectModalOpen(true)}
+          onConvert={handleConvertSingle}
           onSelectAll={selectAll}
           onClear={exitSelectMode}
+        />
+      )}
+
+      {/* Reject reason modal */}
+      {rejectModalOpen && (
+        <RejectModal
+          count={selectedIds.size}
+          onConfirm={handleRejectConfirm}
+          onCancel={() => setRejectModalOpen(false)}
         />
       )}
 

@@ -84,6 +84,7 @@ export interface Task {
   cycle_id?: string | null
   cycle_plan_id?: string | null
   phase_number?: number | null
+  work_type?: string | null
   created_by?: string
   assignee?: string | null
   created_at: string
@@ -112,6 +113,7 @@ export interface Idea {
   source_type?: string | null
   relevance?: string | null
   extracted_ideas?: string[] | null
+  rejection_reason?: string | null
   created_at: string
 }
 
