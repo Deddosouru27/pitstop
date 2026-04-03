@@ -18,6 +18,7 @@ import AgentLogsPage from './components/agent-logs/AgentLogsPage'
 import AgentMonitorPage from './components/agents/AgentMonitorPage'
 import IntakeLogsPage from './components/intake-logs/IntakeLogsPage'
 import IdeasTriagePage from './components/triage/IdeasTriagePage'
+import StatsPage from './components/stats/StatsPage'
 
 function AppShell() {
   const { selectedTaskId, closeTask } = useApp()
@@ -43,6 +44,7 @@ function AppShell() {
           <Route path="/agents" element={<AgentMonitorPage />} />
           <Route path="/intake-logs" element={<IntakeLogsPage />} />
           <Route path="/ideas-triage" element={<IdeasTriagePage />} />
+          <Route path="/stats" element={<StatsPage />} />
           <Route path="*" element={<Navigate to="/projects" replace />} />
         </Routes>
       </main>
