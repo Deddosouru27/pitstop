@@ -62,8 +62,17 @@ export function useAgents() {
 
   useEffect(() => {
     load()
-    const interval = setInterval(load, 30_000)
-    return () => clearInterval(interval)
+    const interval = setInterval(load, 10_000)
+
+    const channel = supabase
+      .channel('agents-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'agents' }, () => load())
+      .subscribe()
+
+    return () => {
+      clearInterval(interval)
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   return { agents, loading }
