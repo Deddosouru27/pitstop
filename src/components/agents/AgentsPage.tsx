@@ -1,4 +1,6 @@
-import { Users } from 'lucide-react'
+import { useState } from 'react'
+import { Users, RefreshCw } from 'lucide-react'
+import { supabase } from '../../lib/supabase'
 import { useAgents } from '../../hooks/useAgents'
 import type { Agent, AgentStatus } from '../../hooks/useAgents'
 
@@ -153,18 +155,75 @@ function SummaryBar({ agents }: { agents: Agent[] }) {
 
 // ── Page ───────────────────────────────────────────────────────────────────────
 
+type AutorunState = 'idle' | 'loading' | 'success' | 'error'
+
 export default function AgentsPage() {
-  const { agents, loading } = useAgents()
+  const { agents, loading, refresh } = useAgents()
+  const [autorunState, setAutorunState] = useState<AutorunState>('idle')
+  const [refreshing, setRefreshing]     = useState(false)
+
+  const handleStartAutorun = async () => {
+    setAutorunState('loading')
+    const { error } = await supabase.from('agent_jobs').insert({
+      type:    'autorun_start',
+      payload: { project: 'MAOS' },
+      status:  'pending',
+    })
+    if (error) {
+      setAutorunState('error')
+      setTimeout(() => setAutorunState('idle'), 3000)
+    } else {
+      setAutorunState('success')
+      setTimeout(() => setAutorunState('idle'), 4000)
+    }
+  }
+
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    await refresh()
+    setRefreshing(false)
+  }
+
+  const autorunLabel: Record<AutorunState, string> = {
+    idle:    '🚀 Запустить Autorun',
+    loading: 'Отправка...',
+    success: '✅ Команда отправлена',
+    error:   '❌ Ошибка',
+  }
 
   return (
     <div className="flex flex-col min-h-full pb-8">
       {/* Header */}
-      <div className="px-4 pt-6 pb-4">
-        <div className="flex items-center gap-2 mb-1">
-          <Users size={20} className="text-purple-400" strokeWidth={1.75} />
-          <h1 className="text-2xl font-bold text-slate-100">Агенты</h1>
+      <div className="px-4 pt-6 pb-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Users size={20} className="text-purple-400" strokeWidth={1.75} />
+            <h1 className="text-2xl font-bold text-slate-100">Агенты</h1>
+          </div>
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing || loading}
+            className="text-slate-500 hover:text-slate-300 disabled:opacity-40 transition-colors p-1"
+            title="Обновить статусы"
+          >
+            <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
+          </button>
         </div>
         {!loading && <SummaryBar agents={agents} />}
+        {/* Autorun trigger */}
+        <button
+          onClick={handleStartAutorun}
+          disabled={autorunState === 'loading' || autorunState === 'success'}
+          className={`w-full font-semibold rounded-xl py-3 text-sm transition-colors ${
+            autorunState === 'success'
+              ? 'bg-emerald-900/50 text-emerald-400 border border-emerald-700/40'
+              : autorunState === 'error'
+              ? 'bg-red-900/40 text-red-400 border border-red-700/30'
+              : 'bg-purple-700/30 hover:bg-purple-700/50 text-purple-300 border border-purple-600/30'
+          } disabled:opacity-60`}
+        >
+          {autorunLabel[autorunState]}
+        </button>
       </div>
 
       {loading ? (

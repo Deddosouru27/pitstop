@@ -75,5 +75,5 @@ export function useAgents() {
     }
   }, [])
 
-  return { agents, loading }
+  return { agents, loading, refresh: load }
 }
