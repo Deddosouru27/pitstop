@@ -17,24 +17,19 @@ function timeAgo(dateStr: string): string {
 
 // ── Status badge ───────────────────────────────────────────────────────────────
 
-const STATUS_CFG: Record<AgentStatus, { label: string; cls: string; pulse: boolean }> = {
-  idle:    { label: 'Свободен',  cls: 'bg-slate-700 text-slate-400',          pulse: false },
-  working: { label: 'Работает',  cls: 'bg-emerald-900/60 text-emerald-400',   pulse: true  },
-  stuck:   { label: 'Застрял',   cls: 'bg-yellow-900/50 text-yellow-400',     pulse: false },
-  failed:  { label: 'Ошибка',    cls: 'bg-red-900/50 text-red-400',           pulse: false },
-  offline: { label: 'Офлайн',    cls: 'bg-slate-800 text-slate-600',          pulse: false },
+const STATUS_CFG: Record<AgentStatus, { label: string; cls: string; dot: string }> = {
+  idle:    { label: 'Свободен',  cls: 'bg-gray-700 text-gray-400',          dot: 'bg-gray-500' },
+  working: { label: 'Работает',  cls: 'bg-green-900/60 text-green-400',     dot: 'bg-green-500 animate-pulse' },
+  stuck:   { label: 'Застрял',   cls: 'bg-red-900/50 text-red-400',         dot: 'bg-red-500' },
+  failed:  { label: 'Ошибка',    cls: 'bg-red-900/50 text-red-400',         dot: 'bg-red-500' },
+  offline: { label: 'Офлайн',    cls: 'bg-slate-800 text-slate-600',        dot: 'bg-slate-600' },
 }
 
 function StatusBadge({ status }: { status: AgentStatus }) {
   const cfg = STATUS_CFG[status] ?? STATUS_CFG.offline
   return (
     <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full ${cfg.cls}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${
-        status === 'working' ? 'bg-emerald-400 animate-pulse' :
-        status === 'stuck'   ? 'bg-yellow-400' :
-        status === 'failed'  ? 'bg-red-400' :
-        status === 'idle'    ? 'bg-slate-400' : 'bg-slate-600'
-      }`} />
+      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
       {cfg.label}
     </span>
   )
@@ -67,8 +62,8 @@ function AgentCard({ agent }: { agent: Agent }) {
   return (
     <div className={`bg-white/5 rounded-2xl border p-4 space-y-3 ${
       agent.status === 'failed' ? 'border-red-500/30' :
-      agent.status === 'stuck'  ? 'border-yellow-500/20' :
-      agent.status === 'working' ? 'border-emerald-500/20' :
+      agent.status === 'stuck'  ? 'border-red-500/20' :
+      agent.status === 'working' ? 'border-green-500/20' :
       'border-white/[0.06]'
     }`}>
       {/* Header */}
@@ -143,11 +138,11 @@ function SummaryBar({ agents }: { agents: Agent[] }) {
     <div className="flex items-center gap-2 text-sm text-slate-400">
       <span>{agents.length} {agentWord(agents.length)}</span>
       <span className="text-slate-700">·</span>
-      <span className={active > 0 ? 'text-emerald-400' : 'text-slate-600'}>
+      <span className={active > 0 ? 'text-green-400' : 'text-slate-600'}>
         {active} работают
       </span>
       <span className="text-slate-700">·</span>
-      <span className={stuck > 0 ? 'text-yellow-400' : 'text-slate-600'}>
+      <span className={stuck > 0 ? 'text-red-400' : 'text-slate-600'}>
         {stuck} застряли
       </span>
     </div>
