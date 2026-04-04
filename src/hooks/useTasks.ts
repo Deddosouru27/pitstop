@@ -131,7 +131,7 @@ export function useTasks() {
     // Optimistic update
     setTasks(prev => prev.map(t =>
       t.id === id
-        ? { ...t, is_completed: completed, completed_at: completed ? now : null, updated_at: now }
+        ? { ...t, is_completed: completed, status: completed ? 'done' : 'todo', completed_at: completed ? now : null, updated_at: now }
         : t
     ))
 
@@ -153,8 +153,9 @@ export function useTasks() {
     // Background DB sync
     supabase.from('tasks').update({
       is_completed: completed,
+      status:       completed ? 'done' : 'todo',
       completed_at: completed ? now : null,
-      updated_at: now,
+      updated_at:   now,
     }).eq('id', id)
   }, [])
 

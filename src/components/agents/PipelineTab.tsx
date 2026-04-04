@@ -255,6 +255,23 @@ export default function PipelineTab({ agents }: { agents: Agent[] }) {
     return () => clearInterval(interval)
   }, [agents, fetchAndBuild])
 
+  // Realtime: rebuild graph when agent_events or tasks change
+  useEffect(() => {
+    if (agentsRef.current.length === 0) return
+
+    const channel = supabase
+      .channel('pipeline-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'agent_events' }, () => {
+        fetchAndBuild()
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'tasks' }, () => {
+        fetchAndBuild()
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [fetchAndBuild])
+
   const onEdgeClick: EdgeMouseHandler = useCallback((_evt, edge) => {
     const data = edge.data as HandoffEdgeData | undefined
     setSelected(data?.handoff ?? null)

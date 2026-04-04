@@ -69,7 +69,7 @@ export function useDataQuality() {
         supabase.from('ideas').select('*', { count: 'exact', head: true }).eq('converted_to_task', true),
         supabase.from('extracted_knowledge').select('*', { count: 'exact', head: true }),
         supabase.from('extracted_knowledge').select('*', { count: 'exact', head: true }).is('knowledge_type', null),
-        supabase.from('extracted_knowledge').select('*', { count: 'exact', head: true }).lt('immediate_relevance', 5),
+        supabase.from('extracted_knowledge').select('*', { count: 'exact', head: true }).is('business_value', null),
         supabase.from('entity_nodes').select('*', { count: 'exact', head: true }),
         supabase.from('entity_edges').select('*', { count: 'exact', head: true }),
         supabase.from('ingested_content').select('created_at').order('created_at', { ascending: false }).limit(1),

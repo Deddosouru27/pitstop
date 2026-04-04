@@ -5,46 +5,64 @@ import CreateTaskModal from './CreateTaskModal'
 import EditTaskModal from './EditTaskModal'
 import type { Task, TaskStatus } from '../../types'
 
-// ── Status group config ───────────────────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────────────────────────
 
-const STATUS_GROUPS: {
-  key: TaskStatus
-  label: string
-  labelCls: string
-}[] = [
+// Active status groups shown inside "Активные" tab
+const ACTIVE_GROUPS: { key: TaskStatus; label: string; labelCls: string }[] = [
   { key: 'in_progress', label: '🔵 В работе', labelCls: 'text-blue-400' },
   { key: 'blocked',     label: '🚫 Blocked',   labelCls: 'text-red-400' },
   { key: 'review',      label: '👀 Review',    labelCls: 'text-purple-400' },
   { key: 'todo',        label: '📋 Todo',      labelCls: 'text-slate-400' },
 ]
 
+// Sorting by work_type: blocker first
+const WORK_TYPE_ORDER: Record<string, number> = {
+  blocker: 6, critical_fix: 5, enabling: 4,
+  product: 3, nice_to_have: 2, exploration: 1,
+}
+
 const ASSIGNEE_BADGE: Record<string, string> = {
   autorun: '🤖', pekar: '🍞', intaker: '🔧',
   nout: '🖥️', opus: '🧠', sonnet: '✨', artur: '👤',
 }
 
+// ── Sort helpers ──────────────────────────────────────────────────────────────
+
+function sortActive(tasks: Task[]): Task[] {
+  return [...tasks].sort((a, b) => {
+    const wa = WORK_TYPE_ORDER[a.work_type ?? ''] ?? 0
+    const wb = WORK_TYPE_ORDER[b.work_type ?? ''] ?? 0
+    if (wb !== wa) return wb - wa
+    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  })
+}
+
+function sortDone(tasks: Task[]): Task[] {
+  return [...tasks].sort(
+    (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+  )
+}
+
 // ── TaskRow ───────────────────────────────────────────────────────────────────
 
-function TaskRow({
-  task,
-  onEdit,
-  onToggle,
-}: {
+function TaskRow({ task, onEdit, onToggle }: {
   task: Task
   onEdit: (t: Task) => void
   onToggle: (id: string, done: boolean) => void
 }) {
+  const isDone = task.is_completed || task.status === 'done'
+
   return (
     <div className="flex items-center gap-3 px-3 py-3 bg-white/[0.03] rounded-2xl border border-white/[0.05]">
       <button
-        onClick={() => onToggle(task.id, !task.is_completed)}
+        onClick={() => onToggle(task.id, !isDone)}
         className="shrink-0 w-[22px] h-[22px] rounded-full border-2 flex items-center justify-center transition-all"
         style={{
-          borderColor: task.is_completed ? '#7c3aed' : '#334155',
-          background:  task.is_completed ? '#7c3aed' : 'transparent',
+          borderColor: isDone ? '#7c3aed' : '#334155',
+          background:  isDone ? '#7c3aed' : 'transparent',
         }}
       >
-        {task.is_completed && (
+        {isDone && (
           <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
             <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
@@ -52,7 +70,7 @@ function TaskRow({
       </button>
 
       <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onEdit(task)}>
-        <p className={`text-sm leading-snug line-clamp-1 ${task.is_completed ? 'line-through text-slate-600' : 'text-slate-100'}`}>
+        <p className={`text-sm leading-snug line-clamp-1 ${isDone ? 'line-through text-slate-600' : 'text-slate-100'}`}>
           {task.title}
         </p>
         <div className="flex items-center gap-2 mt-0.5">
@@ -80,9 +98,7 @@ function TaskRow({
 
 // ── StatusGroup ───────────────────────────────────────────────────────────────
 
-function StatusGroup({
-  label, labelCls, tasks, onEdit, onToggle,
-}: {
+function StatusGroup({ label, labelCls, tasks, onEdit, onToggle }: {
   label: string
   labelCls: string
   tasks: Task[]
@@ -103,19 +119,9 @@ function StatusGroup({
   )
 }
 
-// ── Filter tabs ───────────────────────────────────────────────────────────────
-
-type FilterKey = 'active' | TaskStatus
-
-const FILTER_TABS: { key: FilterKey; label: string }[] = [
-  { key: 'active',      label: 'Активные' },
-  { key: 'todo',        label: 'Todo' },
-  { key: 'in_progress', label: 'В работе' },
-  { key: 'blocked',     label: 'Blocked' },
-  { key: 'done',        label: 'Done' },
-]
-
 // ── Main ──────────────────────────────────────────────────────────────────────
+
+type FilterKey = 'active' | 'done' | 'all'
 
 export default function TasksTab() {
   const { tasks, tasksLoading, completeTask } = useApp()
@@ -129,23 +135,40 @@ export default function TasksTab() {
     setTimeout(() => setToastMsg(null), 3000)
   }
 
+  // Partition by status
   const grouped = useMemo(() => {
     const g: Record<TaskStatus, Task[]> = {
       backlog: [], todo: [], in_progress: [], review: [],
       blocked: [], done: [], cancelled: [],
     }
     for (const t of tasks) {
-      const s = (t.status ?? 'todo') as TaskStatus
+      const s = (t.status ?? (t.is_completed ? 'done' : 'todo')) as TaskStatus
       if (s in g) g[s].push(t)
     }
+    // Sort active groups by work_type order
+    for (const { key } of ACTIVE_GROUPS) g[key] = sortActive(g[key])
+    // Sort done by updated_at desc
+    g.done = sortDone(g.done)
     return g
   }, [tasks])
 
-  const totalActive = STATUS_GROUPS.reduce((s, g) => s + grouped[g.key].length, 0)
+  const totalActive = ACTIVE_GROUPS.reduce((s, g) => s + grouped[g.key].length, 0)
+  const totalDone   = grouped.done.length
+  const totalAll    = tasks.length
+
+  const TABS: { key: FilterKey; label: string; count: number }[] = [
+    { key: 'active', label: 'Активные',    count: totalActive },
+    { key: 'done',   label: 'Выполненные', count: totalDone },
+    { key: 'all',    label: 'Все',         count: totalAll },
+  ]
 
   if (tasksLoading) {
     return <div className="flex items-center justify-center h-48 text-slate-500 text-sm">Загрузка...</div>
   }
+
+  const allTasks = [...tasks].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  )
 
   return (
     <div className="flex flex-col min-h-full pb-24">
@@ -153,74 +176,78 @@ export default function TasksTab() {
       <div className="px-4 pt-6 pb-3">
         <h1 className="text-2xl font-bold text-slate-100">Tasks</h1>
         <p className="text-sm text-slate-500 mt-0.5">
-          {totalActive} активных · {grouped.done.length} выполнено
+          {totalActive} активных · {totalDone} выполнено
         </p>
       </div>
 
       {/* Filter tabs */}
       <div className="px-4 pb-3 flex gap-1.5 overflow-x-auto scrollbar-hide">
-        {FILTER_TABS.map(tab => {
-          const count = tab.key === 'active'
-            ? totalActive
-            : grouped[tab.key as TaskStatus]?.length ?? 0
-          return (
-            <button
-              key={tab.key}
-              onClick={() => setFilter(tab.key)}
-              className={`shrink-0 flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
-                filter === tab.key
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-white/5 text-slate-400 active:bg-white/10'
-              }`}
-            >
-              {tab.label}
-              <span className={`text-[10px] rounded-full px-1.5 py-0.5 font-semibold ${
-                filter === tab.key ? 'bg-white/20 text-white' : 'bg-white/5 text-slate-500'
-              }`}>{count}</span>
-            </button>
-          )
-        })}
+        {TABS.map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setFilter(tab.key)}
+            className={`shrink-0 flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
+              filter === tab.key
+                ? 'bg-purple-600 text-white'
+                : 'bg-white/5 text-slate-400 active:bg-white/10'
+            }`}
+          >
+            {tab.label}
+            <span className={`text-[10px] rounded-full px-1.5 py-0.5 font-semibold ${
+              filter === tab.key ? 'bg-white/20 text-white' : 'bg-white/5 text-slate-500'
+            }`}>{tab.count}</span>
+          </button>
+        ))}
       </div>
 
-      {/* Task groups */}
+      {/* Content */}
       <div className="px-4 space-y-5 flex-1">
-        {filter === 'active' && STATUS_GROUPS.map(g => (
-          <StatusGroup
-            key={g.key}
-            label={g.label}
-            labelCls={g.labelCls}
-            tasks={grouped[g.key]}
-            onEdit={setEditTask}
-            onToggle={completeTask}
-          />
-        ))}
 
-        {filter !== 'active' && filter !== 'done' && (
-          <StatusGroup
-            label={STATUS_GROUPS.find(g => g.key === filter)?.label ?? filter}
-            labelCls={STATUS_GROUPS.find(g => g.key === filter)?.labelCls ?? 'text-slate-400'}
-            tasks={grouped[filter as TaskStatus] ?? []}
-            onEdit={setEditTask}
-            onToggle={completeTask}
-          />
+        {/* Active: status sub-groups */}
+        {filter === 'active' && (
+          <>
+            {ACTIVE_GROUPS.map(g => (
+              <StatusGroup
+                key={g.key}
+                label={g.label}
+                labelCls={g.labelCls}
+                tasks={grouped[g.key]}
+                onEdit={setEditTask}
+                onToggle={completeTask}
+              />
+            ))}
+            {totalActive === 0 && (
+              <div className="flex flex-col items-center py-16 text-slate-600">
+                <p className="text-3xl mb-3">✅</p>
+                <p className="text-sm">Все активные задачи выполнены!</p>
+              </div>
+            )}
+          </>
         )}
 
+        {/* Done: sorted by updated_at DESC */}
         {filter === 'done' && (
+          <>
+            {totalDone === 0 ? (
+              <div className="flex flex-col items-center py-16 text-slate-600">
+                <p className="text-sm">Выполненных задач нет</p>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {grouped.done.map(t => (
+                  <TaskRow key={t.id} task={t} onEdit={setEditTask} onToggle={completeTask} />
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* All: flat list newest-first */}
+        {filter === 'all' && (
           <div className="space-y-1.5">
-            <p className="text-xs font-semibold uppercase tracking-wider px-1 text-slate-600 flex items-center gap-2">
-              ✅ Done
-              <span className="font-normal text-slate-700 normal-case">{grouped.done.length}</span>
-            </p>
-            {grouped.done.map(t => (
+            {allTasks.map(t => (
               <TaskRow key={t.id} task={t} onEdit={setEditTask} onToggle={completeTask} />
             ))}
-          </div>
-        )}
-
-        {filter === 'active' && totalActive === 0 && (
-          <div className="flex flex-col items-center py-16 text-slate-600">
-            <p className="text-3xl mb-3">✅</p>
-            <p className="text-sm">Все активные задачи выполнены!</p>
           </div>
         )}
       </div>

@@ -107,7 +107,7 @@ function KnowledgeSection({ d }: { d: KnowledgeHealth }) {
   const clusterPct = d.total > 0 ? Math.round(d.withoutCluster / d.total * 100) : 0
   const clusterLevel: HealthLevel = clusterPct > 50 ? 'red' : clusterPct > 20 ? 'yellow' : 'green'
   const lowPct = d.total > 0 ? Math.round(d.lowScore / d.total * 100) : 0
-  const lowLevel: HealthLevel = lowPct > 40 ? 'red' : lowPct > 20 ? 'yellow' : 'green'
+  const lowLevel: HealthLevel = lowPct > 30 ? 'red' : lowPct > 10 ? 'yellow' : 'green'
   const overall: HealthLevel = clusterLevel === 'red' || lowLevel === 'red' ? 'red' : clusterLevel === 'yellow' || lowLevel === 'yellow' ? 'yellow' : 'green'
   return (
     <Section icon="🧠" title="База знаний" overallLevel={overall}>
@@ -122,7 +122,7 @@ function KnowledgeSection({ d }: { d: KnowledgeHealth }) {
         label="Без оценки важности"
         value={`${d.lowScore} (${lowPct}%)`}
         level={lowLevel}
-        tooltip="Знания у которых нет оценки насколько они важны прямо сейчас. Это нормально — оценка проставляется при поиске."
+        tooltip="Знания без заполненного поля business_value. Зелёный < 10%, жёлтый 10–30%, красный > 30%."
       />
     </Section>
   )
