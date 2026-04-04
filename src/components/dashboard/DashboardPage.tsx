@@ -844,6 +844,109 @@ function QuickCaptureModal({ onClose }: { onClose: () => void }) {
   )
 }
 
+// ── Today widget ──────────────────────────────────────────────────────────────
+
+interface TodayStats {
+  tasksDone: number
+  snapshots: number
+  ideasProcessed: number
+  agentEvents: number
+}
+
+function TodayWidget() {
+  const [data, setData]     = useState<TodayStats | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function load() {
+      // today in ISO date string (local midnight → UTC range handled server-side via gte/lt)
+      const todayStart = new Date()
+      todayStart.setHours(0, 0, 0, 0)
+      const iso = todayStart.toISOString()
+
+      const [tasksDoneRes, snapsRes, ideasRes, eventsRes] = await Promise.all([
+        supabase
+          .from('tasks')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'done')
+          .gte('updated_at', iso),
+        supabase
+          .from('context_snapshots')
+          .select('*', { count: 'exact', head: true })
+          .gte('created_at', iso),
+        supabase
+          .from('ideas')
+          .select('*', { count: 'exact', head: true })
+          .not('status', 'in', '("new","pending")')
+          .gte('updated_at', iso),
+        supabase
+          .from('agent_events')
+          .select('*', { count: 'exact', head: true })
+          .gte('created_at', iso),
+      ])
+
+      if (cancelled) return
+
+      setData({
+        tasksDone:      tasksDoneRes.count ?? 0,
+        snapshots:      snapsRes.count ?? 0,
+        ideasProcessed: ideasRes.count ?? 0,
+        agentEvents:    eventsRes.count ?? 0,
+      })
+      setLoading(false)
+    }
+
+    load()
+    return () => { cancelled = true }
+  }, [])
+
+  if (loading) return null
+
+  const d = data!
+  const totalActivity = d.tasksDone + d.snapshots + d.ideasProcessed + d.agentEvents
+  const quiet = totalActivity === 0
+
+  const items = [
+    { icon: '✅', label: 'задач закрыто',   value: d.tasksDone      },
+    { icon: '📸', label: 'снапшотов',       value: d.snapshots      },
+    { icon: '💡', label: 'идей обработано', value: d.ideasProcessed },
+    { icon: '⚡', label: 'agent events',    value: d.agentEvents    },
+  ]
+
+  const today = new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })
+
+  return (
+    <div className="bg-white/[0.04] rounded-2xl border border-white/[0.06] px-4 py-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+          🌅 Сегодня
+        </p>
+        <span className="text-[11px] text-slate-600">{today}</span>
+      </div>
+
+      {quiet ? (
+        <p className="text-sm text-slate-600 italic py-1">Тихий день 🌙</p>
+      ) : (
+        <div className="grid grid-cols-2 gap-2">
+          {items.map(item => (
+            <div key={item.label} className="flex items-center gap-2">
+              <span className="text-base">{item.icon}</span>
+              <div>
+                <p className={`text-lg font-bold leading-none ${item.value > 0 ? 'text-slate-100' : 'text-slate-700'}`}>
+                  {item.value}
+                </p>
+                <p className="text-[10px] text-slate-600 mt-0.5">{item.label}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 // ── Quick Actions ─────────────────────────────────────────────────────────────
@@ -905,6 +1008,9 @@ export default function DashboardPage() {
         {/* Autorun status + agent count */}
         <AutorunStatus />
         <AgentCountWidget />
+
+        {/* Today's activity */}
+        <TodayWidget />
 
         {/* Stat cards */}
         <div className="grid grid-cols-2 gap-2">
