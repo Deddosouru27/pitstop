@@ -40,7 +40,7 @@ const STATUS_TABS: { key: StatusFilter; label: string }[] = [
 function ideaMatchesStatus(idea: Idea, filter: StatusFilter): boolean {
   const s = idea.status
   switch (filter) {
-    case 'new':      return !s || s === 'pending'
+    case 'new':      return !s || s === 'new' || s === 'pending'
     case 'approved': return s === 'accepted'
     case 'rejected': return s === 'dismissed'
     case 'deferred': return s === 'deferred'
