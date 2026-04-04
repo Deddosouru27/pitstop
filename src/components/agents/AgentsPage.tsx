@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Users, RefreshCw } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAgents } from '../../hooks/useAgents'
@@ -155,27 +155,71 @@ function SummaryBar({ agents }: { agents: Agent[] }) {
 
 // ── Page ───────────────────────────────────────────────────────────────────────
 
-type AutorunState = 'idle' | 'loading' | 'success' | 'error'
+type AutorunPhase = 'idle' | 'inserting' | 'pending' | 'processing' | 'completed' | 'failed'
 
 export default function AgentsPage() {
   const { agents, loading, refresh } = useAgents()
-  const [autorunState, setAutorunState] = useState<AutorunState>('idle')
-  const [refreshing, setRefreshing]     = useState(false)
+  const [phase, setPhase]         = useState<AutorunPhase>('idle')
+  const [jobId, setJobId]         = useState<string | null>(null)
+  const [jobError, setJobError]   = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // ── Poll agent_jobs row until terminal state ──────────────────────────────
+  useEffect(() => {
+    if (!jobId || phase === 'idle' || phase === 'completed' || phase === 'failed') return
+
+    const poll = async () => {
+      const { data } = await supabase
+        .from('agent_jobs')
+        .select('status, result')
+        .eq('id', jobId)
+        .single()
+      if (!data) return
+
+      const s = data.status as string
+      if (s === 'processing') {
+        setPhase('processing')
+      } else if (s === 'completed') {
+        setPhase('completed')
+        refresh()
+        setTimeout(() => { setPhase('idle'); setJobId(null) }, 5000)
+        if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+      } else if (s === 'failed') {
+        const result = data.result as Record<string, unknown> | null
+        setJobError(String(result?.error ?? result?.message ?? 'Неизвестная ошибка'))
+        setPhase('failed')
+        setTimeout(() => { setPhase('idle'); setJobId(null); setJobError(null) }, 5000)
+        if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+      }
+    }
+
+    pollRef.current = setInterval(poll, 5_000)
+    poll() // immediate first check
+    return () => {
+      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+    }
+  }, [jobId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleStartAutorun = async () => {
-    setAutorunState('loading')
-    const { error } = await supabase.from('agent_jobs').insert({
-      type:    'autorun_start',
-      payload: { project: 'MAOS' },
-      status:  'pending',
-    })
-    if (error) {
-      setAutorunState('error')
-      setTimeout(() => setAutorunState('idle'), 3000)
-    } else {
-      setAutorunState('success')
-      setTimeout(() => setAutorunState('idle'), 4000)
+    setPhase('inserting')
+    setJobError(null)
+
+    const { data, error } = await supabase
+      .from('agent_jobs')
+      .insert({ type: 'autorun_start', payload: { project: 'MAOS' }, status: 'pending' })
+      .select('id')
+      .single()
+
+    if (error || !data) {
+      setJobError(error?.message ?? 'Не удалось создать задачу')
+      setPhase('failed')
+      setTimeout(() => { setPhase('idle'); setJobError(null) }, 4000)
+      return
     }
+
+    setJobId(data.id as string)
+    setPhase('pending')
   }
 
   const handleRefresh = async () => {
@@ -184,12 +228,16 @@ export default function AgentsPage() {
     setRefreshing(false)
   }
 
-  const autorunLabel: Record<AutorunState, string> = {
-    idle:    '🚀 Запустить Autorun',
-    loading: 'Отправка...',
-    success: '✅ Команда отправлена',
-    error:   '❌ Ошибка',
+  const PHASE_CFG: Record<AutorunPhase, { label: string; cls: string }> = {
+    idle:       { label: '🚀 Запустить Autorun',  cls: 'bg-purple-700/30 hover:bg-purple-700/50 text-purple-300 border-purple-600/30' },
+    inserting:  { label: 'Отправка...',            cls: 'bg-slate-800 text-slate-400 border-slate-700/30' },
+    pending:    { label: '⏳ Ожидание Runner...',  cls: 'bg-amber-900/30 text-amber-400 border-amber-700/30' },
+    processing: { label: '🔄 Autorun работает...', cls: 'bg-blue-900/30 text-blue-400 border-blue-700/30' },
+    completed:  { label: '✅ Autorun завершён',    cls: 'bg-emerald-900/50 text-emerald-400 border-emerald-700/40' },
+    failed:     { label: '❌ Ошибка',              cls: 'bg-red-900/40 text-red-400 border-red-700/30' },
   }
+  const cfg = PHASE_CFG[phase]
+  const btnDisabled = phase !== 'idle'
 
   return (
     <div className="flex flex-col min-h-full pb-8">
@@ -213,17 +261,14 @@ export default function AgentsPage() {
         {/* Autorun trigger */}
         <button
           onClick={handleStartAutorun}
-          disabled={autorunState === 'loading' || autorunState === 'success'}
-          className={`w-full font-semibold rounded-xl py-3 text-sm transition-colors ${
-            autorunState === 'success'
-              ? 'bg-emerald-900/50 text-emerald-400 border border-emerald-700/40'
-              : autorunState === 'error'
-              ? 'bg-red-900/40 text-red-400 border border-red-700/30'
-              : 'bg-purple-700/30 hover:bg-purple-700/50 text-purple-300 border border-purple-600/30'
-          } disabled:opacity-60`}
+          disabled={btnDisabled}
+          className={`w-full font-semibold rounded-xl py-3 text-sm transition-colors border ${cfg.cls} disabled:opacity-70`}
         >
-          {autorunLabel[autorunState]}
+          {cfg.label}
         </button>
+        {jobError && (
+          <p className="text-xs text-red-400 px-1">{jobError}</p>
+        )}
       </div>
 
       {loading ? (
