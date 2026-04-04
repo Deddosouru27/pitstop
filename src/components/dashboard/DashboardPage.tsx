@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
-import { BarChart2, ChevronDown, X, Plus, Inbox, Lightbulb, Compass, Users } from 'lucide-react'
+import { BarChart2, ChevronDown, X, Plus, Inbox, Lightbulb, TrendingUp, Users } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAgentStats } from '../../hooks/useAgentStats'
 import { useCyclePlan } from '../../hooks/useCyclePlan'
@@ -699,23 +699,22 @@ function CycleTwoWidget() {
   )
 }
 
-// ── Quick Capture URL ─────────────────────────────────────────────────────────
+// ── Quick Capture Modal ───────────────────────────────────────────────────────
 
-function QuickCapture() {
-  const [url, setUrl]     = useState('')
+function QuickCaptureModal({ onClose }: { onClose: () => void }) {
+  const [url, setUrl]       = useState('')
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [message, setMessage] = useState('')
 
   const handleProcess = async () => {
     const trimmed = url.trim()
     if (!trimmed) return
-    let parsed: URL
     try {
-      parsed = new URL(trimmed)
+      const parsed = new URL(trimmed)
       if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error()
     } catch {
       setStatus('error')
-      setMessage('Невалидный URL. Начинается с http:// или https://')
+      setMessage('Невалидный URL. Должен начинаться с http:// или https://')
       return
     }
 
@@ -744,31 +743,43 @@ function QuickCapture() {
   }
 
   return (
-    <div className="bg-white/5 rounded-2xl px-4 py-4 border border-white/[0.06] space-y-3">
-      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">📥 Quick Capture URL</p>
-      <div className="flex gap-2">
-        <input
-          type="url"
-          value={url}
-          onChange={e => { setUrl(e.target.value); setStatus('idle'); setMessage('') }}
-          onKeyDown={e => e.key === 'Enter' && handleProcess()}
-          placeholder="https://..."
-          className="flex-1 bg-surface text-slate-100 placeholder-slate-600 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-accent min-w-0"
-        />
-        <button
-          onClick={handleProcess}
-          disabled={!url.trim() || status === 'loading'}
-          className="bg-accent hover:bg-accent/90 disabled:opacity-40 text-white font-medium rounded-xl px-4 py-2.5 text-sm transition-colors shrink-0"
-        >
-          {status === 'loading' ? '⏳' : 'Обработать'}
-        </button>
+    <div className="fixed inset-0 z-50 flex items-end animate-fade-in" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60" />
+      <div
+        className="relative w-full bg-surface-el rounded-t-2xl p-5 pb-10 space-y-4 shadow-2xl animate-slide-up"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold text-slate-100">📥 Quick Capture URL</h2>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-300">
+            <X size={20} />
+          </button>
+        </div>
+        <div className="flex gap-2">
+          <input
+            autoFocus
+            type="url"
+            value={url}
+            onChange={e => { setUrl(e.target.value); setStatus('idle'); setMessage('') }}
+            onKeyDown={e => e.key === 'Enter' && handleProcess()}
+            placeholder="https://..."
+            className="flex-1 bg-surface text-slate-100 placeholder-slate-600 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-accent min-w-0"
+          />
+          <button
+            onClick={handleProcess}
+            disabled={!url.trim() || status === 'loading'}
+            className="bg-accent hover:bg-accent/90 disabled:opacity-40 text-white font-medium rounded-xl px-4 py-2.5 text-sm transition-colors shrink-0"
+          >
+            {status === 'loading' ? '⏳' : 'Обработать'}
+          </button>
+        </div>
+        {status === 'success' && (
+          <p className="text-sm text-emerald-400">✅ {message}</p>
+        )}
+        {status === 'error' && (
+          <p className="text-sm text-red-400">❌ Ошибка: {message}</p>
+        )}
       </div>
-      {status === 'success' && (
-        <p className="text-xs text-emerald-400">✅ {message}</p>
-      )}
-      {status === 'error' && (
-        <p className="text-xs text-red-400">❌ Ошибка: {message}</p>
-      )}
     </div>
   )
 }
@@ -777,14 +788,14 @@ function QuickCapture() {
 
 // ── Quick Actions ─────────────────────────────────────────────────────────────
 
-function QuickActions() {
+function QuickActions({ onOpenCapture }: { onOpenCapture: () => void }) {
   const navigate = useNavigate()
 
   const actions = [
-    { icon: Plus,      label: 'Добавить задачу',  onClick: () => navigate('/projects') },
-    { icon: Inbox,     label: 'Quick Capture',    onClick: () => navigate('/intake-logs') },
-    { icon: Lightbulb, label: 'Разобрать идеи',   onClick: () => navigate('/ideas-triage') },
-    { icon: Compass,   label: 'Обзор знаний',     onClick: () => navigate('/discovery') },
+    { icon: Plus,        label: 'Добавить задачу', onClick: () => navigate('/tasks') },
+    { icon: Inbox,       label: 'Quick Capture',   onClick: onOpenCapture },
+    { icon: Lightbulb,   label: 'Разобрать идеи',  onClick: () => navigate('/ideas-triage') },
+    { icon: TrendingUp,  label: '📊 Статистика',   onClick: () => navigate('/stats') },
   ]
 
   return (
@@ -805,6 +816,7 @@ function QuickActions() {
 
 export default function DashboardPage() {
   const { stats, loading } = useAgentStats()
+  const [captureOpen, setCaptureOpen] = useState(false)
 
   if (loading) {
     return (
@@ -870,10 +882,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Quick actions */}
-        <QuickActions />
-
-        {/* Quick capture */}
-        <QuickCapture />
+        <QuickActions onOpenCapture={() => setCaptureOpen(true)} />
 
         {/* Knowledge stats */}
         <KnowledgeStatsWidget />
@@ -914,6 +923,8 @@ export default function DashboardPage() {
         {/* Activity feed */}
         <ActivityFeed />
       </div>
+
+      {captureOpen && <QuickCaptureModal onClose={() => setCaptureOpen(false)} />}
     </div>
   )
 }

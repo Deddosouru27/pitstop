@@ -48,12 +48,26 @@ export function useAgentStats() {
       const recentJobs: AgentJob[] = recentRes.data ?? []
       const memoryCount: number | null = memoryRes.error ? null : (memoryRes.count ?? null)
 
-      // ── Success rate за 7 дней ────────────────────────────────────────────
+      // ── Success rate + Выполнено за 7 дней (из tasks) ────────────────────
       const since7 = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-      const last7Jobs = allJobs.filter(j => j.created_at >= since7)
-      const total7 = last7Jobs.length
-      const completed7 = last7Jobs.filter(j => j.status === 'completed').length
-      const successRate = total7 > 0 ? Math.round((completed7 / total7) * 100) : 0
+      const [doneRes, failedRes] = await Promise.all([
+        supabase
+          .from('tasks')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'done')
+          .gte('completed_at', since7),
+        supabase
+          .from('tasks')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'failed')
+          .gte('completed_at', since7),
+      ])
+      const completed7 = doneRes.count ?? 0
+      const failed7    = failedRes.count ?? 0
+      const successRate =
+        completed7 + failed7 > 0
+          ? Math.round((completed7 / (completed7 + failed7)) * 100)
+          : 100
 
       // ── Группировка по дням за 14 дней ────────────────────────────────────
       const dayMap = new Map<string, number>()
