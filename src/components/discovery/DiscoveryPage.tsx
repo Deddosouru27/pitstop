@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { Compass, BookOpen, Inbox } from 'lucide-react'
 import { useDiscovery } from '../../hooks/useDiscovery'
+import { useKnowledgeWeaknesses } from '../../hooks/useKnowledgeWeaknesses'
 
 const SOURCE_LABELS: Record<string, string> = {
   youtube:   'YouTube',
@@ -39,11 +40,17 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' })
 }
 
+const LEVEL_ICON: Record<string, string> = { green: '✅', yellow: '⚠️', red: '🔴' }
+const LEVEL_CLS:  Record<string, string> = {
+  green:  'text-emerald-400',
+  yellow: 'text-amber-400',
+  red:    'text-red-400',
+}
+
 export default function DiscoveryPage() {
   const navigate = useNavigate()
-  const { gaps, recentSources, loading } = useDiscovery()
-
-  const maxCnt = gaps.length > 0 ? Math.max(...gaps.map(g => g.cnt)) : 1
+  const { recentSources, loading: srcLoading } = useDiscovery()
+  const { weaknesses, total, loading: wkLoading } = useKnowledgeWeaknesses()
 
   return (
     <div className="max-w-lg mx-auto px-4 py-6 pb-24">
@@ -54,50 +61,40 @@ export default function DiscoveryPage() {
         </div>
         <div>
           <h1 className="text-xl font-semibold">Обзор знаний</h1>
-          <p className="text-xs text-slate-500 mt-0.5">Что изучить дальше</p>
+          <p className="text-xs text-slate-500 mt-0.5">
+            {total > 0 ? `${total} записей в базе` : 'Что изучить дальше'}
+          </p>
         </div>
       </div>
 
-      {/* Gaps section */}
+      {/* Weaknesses section */}
       <section className="mb-6">
         <div className="flex items-center gap-2 mb-3 px-1">
           <BookOpen size={13} className="text-slate-500" />
           <h2 className="text-xs font-medium text-slate-500 uppercase tracking-wider">Слабые места</h2>
         </div>
 
-        {loading ? (
+        {wkLoading ? (
           <div className="space-y-2">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="h-14 bg-surface rounded-2xl animate-pulse" />
+              <div key={i} className="h-12 bg-white/[0.04] rounded-2xl animate-pulse" />
             ))}
           </div>
-        ) : gaps.length === 0 ? (
-          <div className="bg-surface rounded-2xl px-4 py-6 text-center text-sm text-slate-500">
-            Нет данных
-          </div>
         ) : (
-          <div className="space-y-2">
-            {gaps.map(gap => {
-              const pct = Math.round((gap.cnt / maxCnt) * 100)
-              return (
-                <button
-                  key={gap.topic_cluster}
-                  onClick={() => navigate('/knowledge')}
-                  className="w-full bg-surface rounded-2xl px-4 py-3 text-left active:bg-surface-el transition-colors"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-slate-200 font-medium truncate pr-2">{gap.topic_cluster}</span>
-                    <span className="text-xs text-slate-500 shrink-0">{gap.cnt} {gap.cnt === 1 ? 'знание' : gap.cnt < 5 ? 'знания' : 'знаний'}</span>
-                  </div>
-                  <div className="h-1 bg-surface-el rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-accent/60 transition-all"
-                      style={{ width: `${Math.max(pct, 4)}%` }}
-                    />
-                  </div>
-                </button>
-              )
-            })}
+          <div className="bg-white/[0.04] rounded-2xl border border-white/[0.06] divide-y divide-white/[0.04]">
+            {weaknesses.map(w => (
+              <button
+                key={w.key}
+                onClick={() => navigate('/knowledge')}
+                className="w-full flex items-center gap-3 px-4 py-3 text-left active:bg-white/5 transition-colors"
+              >
+                <span className="text-sm shrink-0">{LEVEL_ICON[w.level]}</span>
+                <p className="flex-1 text-sm text-slate-300 leading-snug">{w.label}</p>
+                <p className={`text-xs font-semibold shrink-0 ${LEVEL_CLS[w.level]}`}>
+                  {w.count} ({w.pct}%)
+                </p>
+              </button>
+            ))}
           </div>
         )}
       </section>
@@ -109,7 +106,7 @@ export default function DiscoveryPage() {
           <h2 className="text-xs font-medium text-slate-500 uppercase tracking-wider">Последние источники</h2>
         </div>
 
-        {loading ? (
+        {srcLoading ? (
           <div className="space-y-px bg-surface rounded-2xl overflow-hidden">
             {Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="h-12 bg-surface animate-pulse border-b border-white/[0.04] last:border-0" />

@@ -18,23 +18,7 @@ function timeAgo(dateStr: string): string {
 
 // ── Status badge ───────────────────────────────────────────────────────────────
 
-const STATUS_CFG: Record<AgentStatus, { label: string; cls: string; dot: string }> = {
-  idle:    { label: 'Свободен', cls: 'bg-gray-700 text-gray-400',       dot: 'bg-gray-500' },
-  working: { label: 'Работает', cls: 'bg-green-900/60 text-green-400',  dot: 'bg-green-500 animate-pulse' },
-  stuck:   { label: 'Застрял',  cls: 'bg-red-900/50 text-red-400',      dot: 'bg-red-500' },
-  failed:  { label: 'Ошибка',   cls: 'bg-red-900/50 text-red-400',      dot: 'bg-red-500' },
-  offline: { label: 'Офлайн',   cls: 'bg-slate-800 text-slate-600',     dot: 'bg-slate-600' },
-}
 
-function StatusBadge({ status }: { status: AgentStatus }) {
-  const cfg = STATUS_CFG[status] ?? STATUS_CFG.offline
-  return (
-    <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full ${cfg.cls}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
-      {cfg.label}
-    </span>
-  )
-}
 
 // ── Repo badge ─────────────────────────────────────────────────────────────────
 
@@ -190,57 +174,170 @@ function AgentStatsSection({ agentId }: { agentId: string }) {
   )
 }
 
-// ── Agent card ─────────────────────────────────────────────────────────────────
+// ── Agent card — virtual office character ─────────────────────────────────────
+
+const ROLE_AVATAR: Record<string, string> = {
+  frontend:  '🍞',
+  baker:     '🍞',
+  пекарь:    '🍞',
+  intake:    '📬',
+  intaker:   '📬',
+  runner:    '💻',
+  developer: '💻',
+  dev:       '💻',
+  ai:        '🤖',
+  opus:      '🧠',
+  sonnet:    '✨',
+  haiku:     '🌸',
+  analyst:   '📊',
+  tester:    '🔬',
+  manager:   '📋',
+  artur:     '👤',
+}
+
+function agentAvatar(name: string, role: string): string {
+  const needle = (name + ' ' + role).toLowerCase()
+  for (const [key, emoji] of Object.entries(ROLE_AVATAR)) {
+    if (needle.includes(key)) return emoji
+  }
+  return '🤖'
+}
+
+const OFFICE_STATUS: Record<AgentStatus, {
+  ring: string
+  glow: string
+  bg: string
+  border: string
+  badge: string
+  badgeDot: string
+  desc: string
+}> = {
+  working: {
+    ring:   'ring-2 ring-emerald-500/60',
+    glow:   'shadow-[0_0_20px_rgba(52,211,153,0.25)]',
+    bg:     'bg-[#0f1f17]',
+    border: 'border-emerald-500/30',
+    badge:  'bg-emerald-900/60 text-emerald-400',
+    badgeDot: 'bg-emerald-400 animate-pulse',
+    desc:   'Работает',
+  },
+  idle: {
+    ring:   '',
+    glow:   '',
+    bg:     'bg-white/[0.04]',
+    border: 'border-white/[0.07]',
+    badge:  'bg-slate-800/80 text-slate-400',
+    badgeDot: 'bg-slate-500',
+    desc:   'Ожидает',
+  },
+  stuck: {
+    ring:   'ring-1 ring-amber-500/40',
+    glow:   '',
+    bg:     'bg-[#1f1800]',
+    border: 'border-amber-600/25',
+    badge:  'bg-amber-900/50 text-amber-400',
+    badgeDot: 'bg-amber-400',
+    desc:   'Застрял',
+  },
+  failed: {
+    ring:   'ring-1 ring-red-500/50',
+    glow:   '',
+    bg:     'bg-[#1f0a0a]',
+    border: 'border-red-500/30',
+    badge:  'bg-red-900/50 text-red-400',
+    badgeDot: 'bg-red-400 animate-pulse',
+    desc:   'Ошибка',
+  },
+  offline: {
+    ring:   '',
+    glow:   '',
+    bg:     'bg-white/[0.02]',
+    border: 'border-white/[0.04]',
+    badge:  'bg-slate-900 text-slate-600',
+    badgeDot: 'bg-slate-700',
+    desc:   'Офлайн',
+  },
+}
 
 function AgentCard({ agent }: { agent: Agent }) {
-  const heartbeat = agent.last_heartbeat ? timeAgo(agent.last_heartbeat) : '—'
+  const heartbeat = agent.last_heartbeat ? timeAgo(agent.last_heartbeat) : null
+  const avatar    = agentAvatar(agent.name, agent.role)
+  const cfg       = OFFICE_STATUS[agent.status] ?? OFFICE_STATUS.offline
 
   return (
-    <div className={`bg-white/5 rounded-2xl border p-4 space-y-3 ${
-      agent.status === 'failed'  ? 'border-red-500/30' :
-      agent.status === 'stuck'   ? 'border-red-500/20' :
-      agent.status === 'working' ? 'border-green-500/20' :
-      'border-white/[0.06]'
-    }`}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-base font-bold text-slate-100 leading-tight">{agent.name}</p>
-          <p className="text-xs text-slate-500 mt-0.5">{agent.role}</p>
+    <div className={`rounded-2xl border p-4 space-y-3 transition-all ${cfg.bg} ${cfg.border} ${cfg.ring} ${cfg.glow}`}>
+
+      {/* Character header */}
+      <div className="flex items-center gap-3">
+        {/* Avatar circle */}
+        <div className={`relative w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shrink-0 ${
+          agent.status === 'working' ? 'bg-emerald-900/40' :
+          agent.status === 'failed'  ? 'bg-red-900/30'     :
+          agent.status === 'stuck'   ? 'bg-amber-900/30'   :
+          agent.status === 'offline' ? 'bg-slate-900/60'   :
+          'bg-white/[0.06]'
+        }`}>
+          <span className={agent.status === 'offline' ? 'opacity-40 grayscale' : ''}>{avatar}</span>
+          {/* Status indicator dot */}
+          <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#0d0d1a] ${cfg.badgeDot}`} />
         </div>
-        <StatusBadge status={agent.status} />
+
+        {/* Name + role */}
+        <div className="flex-1 min-w-0">
+          <p className={`text-sm font-bold leading-tight truncate ${agent.status === 'offline' ? 'text-slate-600' : 'text-slate-100'}`}>
+            {agent.name}
+          </p>
+          <p className="text-[11px] text-slate-500 truncate mt-0.5">{agent.role}</p>
+          {agent.repo && <RepoBadge repo={agent.repo} />}
+        </div>
+
+        {/* Status badge */}
+        <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full shrink-0 ${cfg.badge}`}>
+          {cfg.desc}
+        </span>
       </div>
 
-      <div className="flex items-center gap-2">
-        <RepoBadge repo={agent.repo} />
-      </div>
-
-      {agent.capabilities.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {agent.capabilities.map(cap => (
-            <span key={cap} className="text-[10px] text-slate-500 bg-white/[0.04] border border-white/[0.06] px-2 py-0.5 rounded-full">
-              {cap}
-            </span>
-          ))}
-        </div>
-      )}
-
-      <div className="border-t border-white/[0.04]" />
-
-      <div className="space-y-1">
-        <p className="text-[10px] text-slate-600 uppercase tracking-wider font-medium">Текущая задача</p>
+      {/* Current task — most prominent for "working" state */}
+      <div className={`rounded-xl px-3 py-2.5 space-y-0.5 ${
+        agent.current_task_id
+          ? agent.status === 'working'
+            ? 'bg-emerald-900/20 border border-emerald-700/20'
+            : 'bg-white/[0.04] border border-white/[0.06]'
+          : 'bg-white/[0.02] border border-white/[0.04]'
+      }`}>
+        <p className="text-[9px] text-slate-600 uppercase tracking-wider font-medium">
+          {agent.status === 'working' ? '⚡ Выполняет' : 'Задача'}
+        </p>
         {agent.current_task_id != null ? (
-          <p className="text-xs text-slate-300 leading-snug line-clamp-2">
+          <p className={`text-xs leading-snug line-clamp-2 ${agent.status === 'working' ? 'text-emerald-300 font-medium' : 'text-slate-300'}`}>
             {agent.current_task_title ?? agent.current_task_id}
           </p>
         ) : (
-          <p className="text-xs text-slate-600 italic">Свободен</p>
+          <p className="text-xs text-slate-600 italic">
+            {agent.status === 'offline' ? 'Недоступен' : 'Свободен'}
+          </p>
         )}
       </div>
 
-      <div className="flex items-center justify-between">
-        <p className="text-[10px] text-slate-600 uppercase tracking-wider font-medium">Heartbeat</p>
-        <p className={`text-xs font-medium ${agent.last_heartbeat ? 'text-slate-400' : 'text-slate-700'}`}>
-          {heartbeat}
+      {/* Capabilities (compact) */}
+      {agent.capabilities.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {agent.capabilities.slice(0, 4).map(cap => (
+            <span key={cap} className="text-[10px] text-slate-600 bg-white/[0.03] border border-white/[0.05] px-1.5 py-0.5 rounded-full">
+              {cap}
+            </span>
+          ))}
+          {agent.capabilities.length > 4 && (
+            <span className="text-[10px] text-slate-700 px-1.5 py-0.5">+{agent.capabilities.length - 4}</span>
+          )}
+        </div>
+      )}
+
+      {/* Heartbeat */}
+      <div className="flex items-center justify-between border-t border-white/[0.04] pt-2">
+        <p className="text-[10px] text-slate-700 uppercase tracking-wider font-medium">Heartbeat</p>
+        <p className={`text-[11px] font-medium ${heartbeat ? 'text-slate-500' : 'text-slate-700'}`}>
+          {heartbeat ?? '—'}
         </p>
       </div>
 
