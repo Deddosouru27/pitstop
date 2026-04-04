@@ -3,6 +3,7 @@ import { Users, RefreshCw } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAgents } from '../../hooks/useAgents'
 import type { Agent, AgentStatus } from '../../hooks/useAgents'
+import PipelineTab from './PipelineTab'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -157,8 +158,11 @@ function SummaryBar({ agents }: { agents: Agent[] }) {
 
 type AutorunPhase = 'idle' | 'inserting' | 'pending' | 'processing' | 'completed' | 'failed'
 
+type TabView = 'cards' | 'pipeline'
+
 export default function AgentsPage() {
   const { agents, loading, refresh } = useAgents()
+  const [tab, setTab]             = useState<TabView>('cards')
   const [phase, setPhase]         = useState<AutorunPhase>('idle')
   const [jobId, setJobId]         = useState<string | null>(null)
   const [jobError, setJobError]   = useState<string | null>(null)
@@ -269,11 +273,29 @@ export default function AgentsPage() {
         {jobError && (
           <p className="text-xs text-red-400 px-1">{jobError}</p>
         )}
+        {/* Tab switcher */}
+        <div className="flex gap-1 bg-white/[0.04] rounded-xl p-1">
+          {(['cards', 'pipeline'] as TabView[]).map(t => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                tab === t ? 'bg-white/10 text-slate-100' : 'text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              {t === 'cards' ? 'Карточки' : 'Pipeline'}
+            </button>
+          ))}
+        </div>
       </div>
 
       {loading ? (
         <div className="flex items-center justify-center flex-1 py-20 text-slate-500 text-sm">
           Загрузка...
+        </div>
+      ) : tab === 'pipeline' ? (
+        <div className="px-4">
+          <PipelineTab agents={agents} />
         </div>
       ) : agents.length === 0 ? (
         <div className="flex flex-col items-center justify-center flex-1 py-20 space-y-2">
