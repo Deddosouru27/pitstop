@@ -4,7 +4,6 @@ import { supabase } from '../../lib/supabase'
 import { useAgents } from '../../hooks/useAgents'
 import type { Agent, AgentStatus } from '../../hooks/useAgents'
 import PipelineTab from './PipelineTab'
-import type { Task } from '../../types'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -372,29 +371,116 @@ function SummaryBar({ agents }: { agents: Agent[] }) {
 
 // ── Autorun Control Panel ──────────────────────────────────────────────────────
 
-const PRIORITY_ORDER: Record<string, number> = { high: 3, medium: 2, low: 1, none: 0 }
+interface QueueTask {
+  id: string
+  title: string
+  status: string
+  priority: string
+  assignee: string | null
+  phase_number: number | null
+  work_type: string | null
+  description: string | null
+}
+
+const WORK_TYPE_CFG: Record<string, { label: string; cls: string }> = {
+  blocker:       { label: 'BLOCKER',   cls: 'bg-red-900/60 text-red-400' },
+  critical_fix:  { label: 'CRITICAL',  cls: 'bg-orange-900/50 text-orange-400' },
+  enabling:      { label: 'ENABLING',  cls: 'bg-blue-900/50 text-blue-400' },
+  product:       { label: 'PRODUCT',   cls: 'bg-purple-900/50 text-purple-400' },
+  nice_to_have:  { label: 'NICE',      cls: 'bg-slate-800 text-slate-400' },
+  exploration:   { label: 'EXPLORE',   cls: 'bg-teal-900/50 text-teal-400' },
+}
+
+const ASSIGNEE_ICON: Record<string, string> = {
+  autorun: '🤖', pekar: '🍞', baker: '🍞', intaker: '📬',
+  nout: '💻', opus: '🧠', sonnet: '✨', artur: '👤',
+}
+
+function workTypeCfg(wt: string | null) {
+  return WORK_TYPE_CFG[wt ?? ''] ?? { label: wt ?? '?', cls: 'bg-slate-800 text-slate-400' }
+}
+
+function TaskDetailSheet({ task, onClose }: { task: QueueTask; onClose: () => void }) {
+  const wtCfg = workTypeCfg(task.work_type)
+  return (
+    <div className="fixed inset-0 z-50 flex items-end" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60" />
+      <div
+        className="relative w-full bg-[#13131a] rounded-t-3xl max-h-[75dvh] flex flex-col shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex justify-center pt-3 pb-1 shrink-0">
+          <div className="w-10 h-1 bg-white/20 rounded-full" />
+        </div>
+        <div className="flex items-center justify-between px-5 py-3 shrink-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${wtCfg.cls}`}>
+              {wtCfg.label}
+            </span>
+            {task.phase_number != null && (
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/5 text-slate-400">
+                Phase {task.phase_number}
+              </span>
+            )}
+            {task.assignee && (
+              <span className="text-xs">{ASSIGNEE_ICON[task.assignee] ?? '👤'} {task.assignee}</span>
+            )}
+          </div>
+          <button onClick={onClose} className="text-slate-500 active:text-slate-300">
+            ✕
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 pb-8 space-y-3">
+          <p className="text-slate-100 text-base font-semibold leading-snug">{task.title}</p>
+          {task.description ? (
+            <p className="text-slate-400 text-sm leading-relaxed whitespace-pre-wrap">{task.description}</p>
+          ) : (
+            <p className="text-slate-600 text-sm italic">Описание не указано</p>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function AutorunPanel() {
-  const [queue, setQueue]       = useState<Task[]>([])
+  const [queue, setQueue]       = useState<QueueTask[]>([])
+  const [cycleName, setCycleName] = useState<string>('')
   const [loading, setLoading]   = useState(true)
-  const [sending, setSending]   = useState<string | null>(null) // 'stop' | 'pause'
+  const [sending, setSending]   = useState<string | null>(null)
   const [lastAction, setLastAction] = useState<string | null>(null)
+  const [selected, setSelected] = useState<QueueTask | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const fetchQueue = useCallback(async () => {
+    // 1. Get active cycle plan
+    const { data: planData } = await supabase
+      .from('cycle_plans')
+      .select('id, name')
+      .eq('status', 'active')
+      .limit(1)
+      .maybeSingle()
+
+    if (!planData) {
+      setQueue([])
+      setCycleName('')
+      setLoading(false)
+      return
+    }
+
+    setCycleName(planData.name as string)
+
+    // 2. Fetch todo tasks from active cycle — no agent_ready filter
     const { data } = await supabase
       .from('tasks')
-      .select('id, title, status, priority, assignee, phase_number, work_type, context_readiness')
+      .select('id, title, status, priority, assignee, phase_number, work_type, description')
+      .eq('cycle_plan_id', planData.id as string)
       .eq('status', 'todo')
-      .eq('context_readiness', 'agent_ready')
-      .order('created_at', { ascending: true })
-      .limit(30)
-    if (data) {
-      const sorted = [...(data as Task[])].sort(
-        (a, b) => (PRIORITY_ORDER[b.priority] ?? 0) - (PRIORITY_ORDER[a.priority] ?? 0)
-      )
-      setQueue(sorted)
-    }
+      .order('phase_number', { ascending: true })
+      .order('work_type', { ascending: true })
+      .limit(50)
+
+    setQueue((data ?? []) as QueueTask[])
     setLoading(false)
   }, [])
 
@@ -418,16 +504,19 @@ function AutorunPanel() {
     }
   }
 
-  const PRIORITY_DOT: Record<string, string> = {
-    high:   'bg-red-500',
-    medium: 'bg-amber-500',
-    low:    'bg-emerald-500',
-    none:   'bg-slate-600',
-  }
+  // Group by phase_number
+  const grouped = queue.reduce<Record<string, QueueTask[]>>((acc, t) => {
+    const key = t.phase_number != null ? `Phase ${t.phase_number}` : 'Без фазы'
+    if (!acc[key]) acc[key] = []
+    acc[key].push(t)
+    return acc
+  }, {})
 
-  const ASSIGNEE_ICON: Record<string, string> = {
-    autorun: '🤖', pekar: '🍞', intaker: '🔧', nout: '🖥️', opus: '🧠', sonnet: '✨', artur: '👤',
-  }
+  const phases = Object.entries(grouped).sort(([a], [b]) => {
+    const numA = parseInt(a.replace('Phase ', '')) || 999
+    const numB = parseInt(b.replace('Phase ', '')) || 999
+    return numA - numB
+  })
 
   return (
     <div className="px-4 space-y-4 pb-8">
@@ -461,11 +550,16 @@ function AutorunPanel() {
       </div>
 
       {/* Task queue */}
-      <div className="space-y-2">
+      <div className="space-y-3">
         <div className="flex items-center justify-between px-1">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-            📋 Очередь задач
-          </p>
+          <div>
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              📋 Очередь задач
+            </p>
+            {cycleName && (
+              <p className="text-[10px] text-slate-600 mt-0.5">{cycleName}</p>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             <span className="text-[11px] text-slate-600">{queue.length} задач</span>
             <button
@@ -482,28 +576,53 @@ function AutorunPanel() {
         ) : queue.length === 0 ? (
           <div className="bg-white/[0.03] rounded-2xl border border-white/[0.05] px-4 py-8 text-center">
             <p className="text-sm text-slate-600">Очередь пуста</p>
-            <p className="text-xs text-slate-700 mt-1">Задач со статусом todo + agent_ready нет</p>
+            <p className="text-xs text-slate-700 mt-1">
+              {cycleName ? `Нет задач todo в ${cycleName}` : 'Нет активного цикла'}
+            </p>
           </div>
         ) : (
-          <div className="space-y-1.5">
-            {queue.map((task, i) => (
-              <div key={task.id} className="flex items-center gap-3 bg-white/[0.03] rounded-xl border border-white/[0.05] px-3 py-2.5">
-                <span className="text-[10px] text-slate-700 font-mono w-4 shrink-0">{i + 1}</span>
-                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${PRIORITY_DOT[task.priority] ?? 'bg-slate-600'}`} />
-                <p className="flex-1 text-xs text-slate-300 line-clamp-1">{task.title}</p>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {task.assignee && ASSIGNEE_ICON[task.assignee] && (
-                    <span className="text-xs">{ASSIGNEE_ICON[task.assignee]}</span>
-                  )}
-                  {task.phase_number != null && (
-                    <span className="text-[9px] text-slate-700">P{task.phase_number}</span>
-                  )}
+          <div className="space-y-3">
+            {phases.map(([phase, tasks]) => (
+              <div key={phase}>
+                {/* Phase header */}
+                <div className="flex items-center gap-2 px-1 mb-1.5">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{phase}</span>
+                  <span className="text-[10px] text-slate-700">·</span>
+                  <span className="text-[10px] text-slate-700">{tasks.length} задач</span>
+                </div>
+                {/* Task rows */}
+                <div className="space-y-1">
+                  {tasks.map(task => {
+                    const wtCfg = workTypeCfg(task.work_type)
+                    return (
+                      <button
+                        key={task.id}
+                        onClick={() => setSelected(task)}
+                        className="w-full flex items-center gap-2.5 bg-white/[0.03] rounded-xl border border-white/[0.05] px-3 py-2.5 text-left active:bg-white/[0.06] transition-colors"
+                      >
+                        {/* Work type badge */}
+                        <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded ${wtCfg.cls}`}>
+                          {wtCfg.label}
+                        </span>
+                        {/* Title */}
+                        <p className="flex-1 text-xs text-slate-300 line-clamp-1">{task.title}</p>
+                        {/* Assignee */}
+                        {task.assignee && (
+                          <span className="shrink-0 text-xs" title={task.assignee}>
+                            {ASSIGNEE_ICON[task.assignee] ?? '👤'}
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {selected && <TaskDetailSheet task={selected} onClose={() => setSelected(null)} />}
     </div>
   )
 }
