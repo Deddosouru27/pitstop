@@ -558,82 +558,109 @@ function ActivityFeed() {
   )
 }
 
-// ── Cycle progress widget (all cycles, filtered by cycle_plan_id) ─────────────
+// ── Cycle history widget ──────────────────────────────────────────────────────
 
-interface CompletedCycleSummary {
+interface CycleSummary {
   id: string
   name: string
+  status: string
   done: number
   total: number
+  updatedAt: string
+}
+
+interface CycleDoneTask {
+  id: string
+  title: string
+  work_type: string | null
+  phase_number: number | null
+}
+
+const WORK_TYPE_ICON: Record<string, string> = {
+  blocker:       '🚫',
+  critical_fix:  '🔥',
+  enabling:      '⚙️',
+  product:       '📦',
+  nice_to_have:  '✨',
+  exploration:   '🔬',
+}
+
+function CycleTasksExpanded({ cycleId }: { cycleId: string }) {
+  const [tasks, setTasks]     = useState<CycleDoneTask[] | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    supabase
+      .from('tasks')
+      .select('id, title, work_type, phase_number')
+      .eq('cycle_plan_id', cycleId)
+      .eq('status', 'done')
+      .order('phase_number', { ascending: true })
+      .then(({ data }) => {
+        if (cancelled) return
+        setTasks((data ?? []) as CycleDoneTask[])
+        setLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [cycleId])
+
+  if (loading) return <p className="text-xs text-slate-600 py-2 pl-1">Загрузка...</p>
+  if (!tasks || tasks.length === 0) return <p className="text-xs text-slate-600 italic py-2 pl-1">Нет выполненных задач</p>
+
+  return (
+    <div className="space-y-1 pt-2 max-h-52 overflow-y-auto">
+      {tasks.map(t => (
+        <div key={t.id} className="flex items-start gap-2 py-0.5">
+          <span className="text-[11px] shrink-0 mt-0.5">{WORK_TYPE_ICON[t.work_type ?? ''] ?? '✅'}</span>
+          <p className="flex-1 text-xs text-slate-400 leading-snug line-clamp-1">{t.title}</p>
+          {t.phase_number != null && (
+            <span className="shrink-0 text-[9px] text-slate-700">P{t.phase_number}</span>
+          )}
+        </div>
+      ))}
+    </div>
+  )
 }
 
 function CycleTwoWidget() {
-  const [completedCycles, setCompletedCycles] = useState<CompletedCycleSummary[]>([])
-  const [activePlanName, setActivePlanName]   = useState<string>('')
-  const [phaseStats, setPhaseStats]           = useState<Record<number, { done: number; total: number }>>({})
-  const [blockers, setBlockers]               = useState<Task[]>([])
-  const [loading, setLoading]                 = useState(true)
+  const [cycles, setCycles]   = useState<CycleSummary[]>([])
+  const [loading, setLoading] = useState(true)
+  const [expanded, setExpanded] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
 
     async function load() {
-      // 1. Fetch all cycle plans (completed + active)
       const { data: plans } = await supabase
         .from('cycle_plans')
-        .select('id, name, status')
+        .select('id, name, status, updated_at')
         .in('status', ['active', 'completed'])
         .order('created_at', { ascending: true })
       if (cancelled) return
 
-      const active    = (plans ?? []).find(p => p.status === 'active') as { id: string; name: string } | undefined
-      const completed = (plans ?? []).filter(p => p.status === 'completed') as { id: string; name: string }[]
+      if (!plans || plans.length === 0) { setLoading(false); return }
 
-      setActivePlanName(active?.name ?? '')
-
-      // 2. Completed cycles — fetch done/total counts
-      if (completed.length > 0) {
-        const summaries = await Promise.all(
-          completed.map(async c => {
-            const [totalRes, doneRes] = await Promise.all([
-              supabase.from('tasks').select('*', { count: 'exact', head: true }).eq('cycle_plan_id', c.id).neq('status', 'cancelled'),
-              supabase.from('tasks').select('*', { count: 'exact', head: true }).eq('cycle_plan_id', c.id).eq('status', 'done'),
-            ])
-            return { id: c.id, name: c.name, done: doneRes.count ?? 0, total: totalRes.count ?? 0 }
-          })
-        )
-        if (!cancelled) setCompletedCycles(summaries)
-      }
-
-      // 3. Active cycle — tasks filtered by cycle_plan_id
-      if (active) {
-        const [tasksRes, blockersRes] = await Promise.all([
-          supabase
-            .from('tasks')
-            .select('id, status, is_completed, phase_number')
-            .eq('cycle_plan_id', active.id)
-            .neq('status', 'cancelled'),
-          supabase
-            .from('tasks')
-            .select('id, title, status, work_type, phase_number, priority')
-            .eq('cycle_plan_id', active.id)
-            .eq('work_type', 'blocker')
-            .eq('status', 'todo'),
-        ])
-        if (!cancelled) {
-          const stats: Record<number, { done: number; total: number }> = {}
-          for (const t of tasksRes.data ?? []) {
-            const p = (t.phase_number as number | null) ?? 0
-            if (!stats[p]) stats[p] = { done: 0, total: 0 }
-            stats[p].total++
-            if (t.status === 'done' || t.is_completed) stats[p].done++
+      const summaries = await Promise.all(
+        (plans as { id: string; name: string; status: string; updated_at: string }[]).map(async p => {
+          const [totalRes, doneRes] = await Promise.all([
+            supabase.from('tasks').select('*', { count: 'exact', head: true }).eq('cycle_plan_id', p.id).neq('status', 'cancelled'),
+            supabase.from('tasks').select('*', { count: 'exact', head: true }).eq('cycle_plan_id', p.id).eq('status', 'done'),
+          ])
+          return {
+            id:        p.id,
+            name:      p.name,
+            status:    p.status,
+            done:      doneRes.count ?? 0,
+            total:     totalRes.count ?? 0,
+            updatedAt: p.updated_at,
           }
-          setPhaseStats(stats)
-          setBlockers((blockersRes.data ?? []) as Task[])
-        }
+        })
+      )
+      if (!cancelled) {
+        setCycles(summaries)
+        setLoading(false)
       }
-
-      if (!cancelled) setLoading(false)
     }
 
     load()
@@ -641,68 +668,91 @@ function CycleTwoWidget() {
   }, [])
 
   if (loading) return null
-  if (completedCycles.length === 0 && !activePlanName) return null
+  if (cycles.length === 0) return null
 
-  const activePhases = Object.entries(phaseStats)
-    .map(([k, v]) => ({ phase: Number(k), ...v }))
-    .filter(p => p.total > 0)
-    .sort((a, b) => a.phase - b.phase)
+  const active    = cycles.find(c => c.status === 'active')
+  const completed = cycles.filter(c => c.status === 'completed')
+
+  function fmtDate(iso: string) {
+    return new Date(iso).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short', year: '2-digit' })
+  }
 
   return (
     <div className="space-y-3">
-      {/* Completed cycle badges */}
-      {completedCycles.map(c => (
-        <div
-          key={c.id}
-          className="bg-gradient-to-r from-amber-900/30 to-yellow-900/20 border border-amber-700/30 rounded-2xl px-4 py-3"
-        >
-          <p className="text-sm font-semibold text-amber-300">
-            🏆 {c.name} — COMPLETE {c.done}/{c.total}
-          </p>
+      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-1">
+        🔄 Циклы
+      </p>
+
+      {/* Active cycle — highlighted at top */}
+      {active && (
+        <div className="bg-purple-600/10 rounded-2xl border border-purple-500/25 px-4 py-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-slate-200">{active.name}</p>
+            <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-purple-600/30 text-purple-300 uppercase tracking-wider">
+              🔄 Активный
+            </span>
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-500">{active.done}/{active.total} задач</span>
+              <span className="text-xs font-semibold text-slate-300">
+                {active.total > 0 ? Math.round(active.done / active.total * 100) : 0}%
+              </span>
+            </div>
+            <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full bg-purple-500 transition-all"
+                style={{ width: `${active.total > 0 ? Math.round(active.done / active.total * 100) : 0}%` }}
+              />
+            </div>
+          </div>
         </div>
-      ))}
+      )}
 
-      {/* Active cycle phase progress */}
-      {activePlanName && (activePhases.length > 0 || blockers.length > 0) && (
-        <div className="bg-white/5 rounded-2xl px-4 py-4 border border-white/[0.06] space-y-3">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-            🔄 <span className="text-slate-200 normal-case font-semibold">{activePlanName}</span>
-          </p>
-
-          {activePhases.map(({ phase, done, total: phaseTotal }) => {
-            const pct = Math.round(done / phaseTotal * 100)
+      {/* Completed cycles */}
+      {completed.length > 0 && (
+        <div className="bg-white/[0.04] rounded-2xl border border-white/[0.06] divide-y divide-white/[0.04] overflow-hidden">
+          {completed.map(c => {
+            const isOpen = expanded === c.id
+            const pct = c.total > 0 ? Math.round(c.done / c.total * 100) : 100
             return (
-              <div key={phase} className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-slate-400">Phase {phase}</span>
-                  <span className="text-[10px] font-semibold text-slate-300">
-                    {done}/{phaseTotal} · {pct}%
-                  </span>
-                </div>
-                <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-purple-500 transition-all"
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
+              <div key={c.id}>
+                <button
+                  onClick={() => setExpanded(prev => prev === c.id ? null : c.id)}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left active:bg-white/5 transition-colors"
+                >
+                  {/* Trophy */}
+                  <span className="text-base shrink-0">🏆</span>
+
+                  {/* Name + meta */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-200 truncate">{c.name}</p>
+                    <p className="text-[10px] text-slate-600 mt-0.5">
+                      {c.done}/{c.total} задач · {fmtDate(c.updatedAt)}
+                    </p>
+                  </div>
+
+                  {/* Badge + chevron */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-emerald-900/40 text-emerald-400 uppercase tracking-wider">
+                      ✅ {pct}%
+                    </span>
+                    <ChevronDown
+                      size={14}
+                      className={`text-slate-600 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                    />
+                  </div>
+                </button>
+
+                {/* Expanded task list */}
+                {isOpen && (
+                  <div className="px-4 pb-3 border-t border-white/[0.04]">
+                    <CycleTasksExpanded cycleId={c.id} />
+                  </div>
+                )}
               </div>
             )
           })}
-
-          {blockers.length > 0 && (
-            <div className="pt-2 border-t border-white/[0.04] space-y-1.5">
-              <p className="text-[10px] text-red-400 font-semibold uppercase tracking-wider">🚫 Blockers</p>
-              {blockers.map(b => (
-                <div key={b.id} className="flex items-start gap-2">
-                  <span className="text-[10px] text-red-500 shrink-0 mt-0.5">●</span>
-                  <p className="flex-1 text-xs text-red-300 line-clamp-1">{b.title}</p>
-                  {b.phase_number != null && (
-                    <span className="text-[9px] text-slate-600 shrink-0">P{b.phase_number}</span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       )}
     </div>
