@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react'
-import { Users, RefreshCw } from 'lucide-react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { Users, RefreshCw, Play, Square, Pause } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAgents } from '../../hooks/useAgents'
 import type { Agent, AgentStatus } from '../../hooks/useAgents'
 import PipelineTab from './PipelineTab'
+import type { Task } from '../../types'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -18,11 +19,11 @@ function timeAgo(dateStr: string): string {
 // ── Status badge ───────────────────────────────────────────────────────────────
 
 const STATUS_CFG: Record<AgentStatus, { label: string; cls: string; dot: string }> = {
-  idle:    { label: 'Свободен',  cls: 'bg-gray-700 text-gray-400',          dot: 'bg-gray-500' },
-  working: { label: 'Работает',  cls: 'bg-green-900/60 text-green-400',     dot: 'bg-green-500 animate-pulse' },
-  stuck:   { label: 'Застрял',   cls: 'bg-red-900/50 text-red-400',         dot: 'bg-red-500' },
-  failed:  { label: 'Ошибка',    cls: 'bg-red-900/50 text-red-400',         dot: 'bg-red-500' },
-  offline: { label: 'Офлайн',    cls: 'bg-slate-800 text-slate-600',        dot: 'bg-slate-600' },
+  idle:    { label: 'Свободен', cls: 'bg-gray-700 text-gray-400',       dot: 'bg-gray-500' },
+  working: { label: 'Работает', cls: 'bg-green-900/60 text-green-400',  dot: 'bg-green-500 animate-pulse' },
+  stuck:   { label: 'Застрял',  cls: 'bg-red-900/50 text-red-400',      dot: 'bg-red-500' },
+  failed:  { label: 'Ошибка',   cls: 'bg-red-900/50 text-red-400',      dot: 'bg-red-500' },
+  offline: { label: 'Офлайн',   cls: 'bg-slate-800 text-slate-600',     dot: 'bg-slate-600' },
 }
 
 function StatusBadge({ status }: { status: AgentStatus }) {
@@ -38,7 +39,7 @@ function StatusBadge({ status }: { status: AgentStatus }) {
 // ── Repo badge ─────────────────────────────────────────────────────────────────
 
 const REPO_CFG: Record<string, string> = {
-  pitstop:      'bg-purple-900/40 text-purple-400',
+  pitstop:       'bg-purple-900/40 text-purple-400',
   'maos-intake': 'bg-blue-900/40 text-blue-400',
   'maos-runner': 'bg-green-900/40 text-green-400',
   chat:          'bg-cyan-900/40 text-cyan-400',
@@ -48,9 +49,7 @@ function RepoBadge({ repo }: { repo: string | null }) {
   if (!repo) return null
   const cls = REPO_CFG[repo] ?? 'bg-slate-800 text-slate-400'
   return (
-    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${cls}`}>
-      {repo}
-    </span>
+    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${cls}`}>{repo}</span>
   )
 }
 
@@ -66,6 +65,7 @@ const EVENT_CFG: Record<string, { dot: string; text: string }> = {
   review_passed: { dot: 'bg-emerald-400', text: 'text-emerald-400' },
   review_failed: { dot: 'bg-red-400',     text: 'text-red-400'     },
   task_received: { dot: 'bg-blue-400',    text: 'text-blue-400'    },
+  task_completed:{ dot: 'bg-emerald-500', text: 'text-emerald-300' },
 }
 
 function EventsSection({ agentId }: { agentId: string }) {
@@ -81,7 +81,7 @@ function EventsSection({ agentId }: { agentId: string }) {
         .select('event_type, details, created_at')
         .eq('agent_id', agentId)
         .order('created_at', { ascending: false })
-        .limit(5)
+        .limit(10)
       setEvents((data ?? []) as AgentEvent[])
       setLoading(false)
     }
@@ -90,16 +90,10 @@ function EventsSection({ agentId }: { agentId: string }) {
 
   return (
     <div className="border-t border-white/[0.04] pt-2">
-      <button
-        onClick={toggle}
-        className="flex items-center justify-between w-full text-left"
-      >
-        <p className="text-[10px] text-slate-600 uppercase tracking-wider font-medium">
-          Последние события
-        </p>
+      <button onClick={toggle} className="flex items-center justify-between w-full text-left">
+        <p className="text-[10px] text-slate-600 uppercase tracking-wider font-medium">Последние события</p>
         <span className="text-[10px] text-slate-600">{open ? '▲' : '▼'}</span>
       </button>
-
       {open && (
         <div className="mt-2 space-y-1.5">
           {loading ? (
@@ -124,6 +118,78 @@ function EventsSection({ agentId }: { agentId: string }) {
   )
 }
 
+// ── Agent stats section (lazy-loaded) ─────────────────────────────────────────
+
+interface AgentStats {
+  done: number
+  reviewPassed: number
+  reviewFailed: number
+}
+
+function AgentStatsSection({ agentId }: { agentId: string }) {
+  const [open, setOpen]       = useState(false)
+  const [stats, setStats]     = useState<AgentStats | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  const toggle = async () => {
+    if (!open && stats === null) {
+      setLoading(true)
+      const { data } = await supabase
+        .from('agent_events')
+        .select('event_type')
+        .eq('agent_id', agentId)
+        .in('event_type', ['task_completed', 'review_passed', 'review_failed'])
+      const rows = (data ?? []) as { event_type: string }[]
+      setStats({
+        done:          rows.filter(r => r.event_type === 'task_completed').length,
+        reviewPassed:  rows.filter(r => r.event_type === 'review_passed').length,
+        reviewFailed:  rows.filter(r => r.event_type === 'review_failed').length,
+      })
+      setLoading(false)
+    }
+    setOpen(v => !v)
+  }
+
+  const passRate = stats
+    ? stats.reviewPassed + stats.reviewFailed > 0
+      ? Math.round(stats.reviewPassed / (stats.reviewPassed + stats.reviewFailed) * 100)
+      : null
+    : null
+
+  return (
+    <div className="border-t border-white/[0.04] pt-2">
+      <button onClick={toggle} className="flex items-center justify-between w-full text-left">
+        <p className="text-[10px] text-slate-600 uppercase tracking-wider font-medium">Статистика</p>
+        <span className="text-[10px] text-slate-600">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div className="mt-2">
+          {loading ? (
+            <p className="text-[11px] text-slate-600">Загрузка...</p>
+          ) : stats ? (
+            <div className="grid grid-cols-3 gap-2">
+              <div className="text-center">
+                <p className="text-sm font-bold text-emerald-400">{stats.done}</p>
+                <p className="text-[10px] text-slate-600 mt-0.5">выполнено</p>
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-bold text-slate-300">
+                  {passRate !== null ? `${passRate}%` : '—'}
+                </p>
+                <p className="text-[10px] text-slate-600 mt-0.5">review pass</p>
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-bold text-red-400">{stats.reviewFailed}</p>
+                <p className="text-[10px] text-slate-600 mt-0.5">review fail</p>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Agent card ─────────────────────────────────────────────────────────────────
 
 function AgentCard({ agent }: { agent: Agent }) {
@@ -131,12 +197,11 @@ function AgentCard({ agent }: { agent: Agent }) {
 
   return (
     <div className={`bg-white/5 rounded-2xl border p-4 space-y-3 ${
-      agent.status === 'failed' ? 'border-red-500/30' :
-      agent.status === 'stuck'  ? 'border-red-500/20' :
+      agent.status === 'failed'  ? 'border-red-500/30' :
+      agent.status === 'stuck'   ? 'border-red-500/20' :
       agent.status === 'working' ? 'border-green-500/20' :
       'border-white/[0.06]'
     }`}>
-      {/* Header */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-base font-bold text-slate-100 leading-tight">{agent.name}</p>
@@ -145,29 +210,22 @@ function AgentCard({ agent }: { agent: Agent }) {
         <StatusBadge status={agent.status} />
       </div>
 
-      {/* Repo */}
       <div className="flex items-center gap-2">
         <RepoBadge repo={agent.repo} />
       </div>
 
-      {/* Capabilities */}
       {agent.capabilities.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {agent.capabilities.map(cap => (
-            <span
-              key={cap}
-              className="text-[10px] text-slate-500 bg-white/[0.04] border border-white/[0.06] px-2 py-0.5 rounded-full"
-            >
+            <span key={cap} className="text-[10px] text-slate-500 bg-white/[0.04] border border-white/[0.06] px-2 py-0.5 rounded-full">
               {cap}
             </span>
           ))}
         </div>
       )}
 
-      {/* Divider */}
       <div className="border-t border-white/[0.04]" />
 
-      {/* Current task */}
       <div className="space-y-1">
         <p className="text-[10px] text-slate-600 uppercase tracking-wider font-medium">Текущая задача</p>
         {agent.current_task_id != null ? (
@@ -179,17 +237,14 @@ function AgentCard({ agent }: { agent: Agent }) {
         )}
       </div>
 
-      {/* Last heartbeat */}
       <div className="flex items-center justify-between">
         <p className="text-[10px] text-slate-600 uppercase tracking-wider font-medium">Heartbeat</p>
-        <p className={`text-xs font-medium ${
-          agent.last_heartbeat ? 'text-slate-400' : 'text-slate-700'
-        }`}>
+        <p className={`text-xs font-medium ${agent.last_heartbeat ? 'text-slate-400' : 'text-slate-700'}`}>
           {heartbeat}
         </p>
       </div>
 
-      {/* Events */}
+      <AgentStatsSection agentId={agent.id} />
       <EventsSection agentId={agent.id} />
     </div>
   )
@@ -203,7 +258,7 @@ function SummaryBar({ agents }: { agents: Agent[] }) {
 
   function agentWord(n: number) {
     if (n % 10 === 1 && n % 100 !== 11) return 'агент'
-    if ([2,3,4].includes(n % 10) && ![12,13,14].includes(n % 100)) return 'агента'
+    if ([2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100)) return 'агента'
     return 'агентов'
   }
 
@@ -211,13 +266,147 @@ function SummaryBar({ agents }: { agents: Agent[] }) {
     <div className="flex items-center gap-2 text-sm text-slate-400">
       <span>{agents.length} {agentWord(agents.length)}</span>
       <span className="text-slate-700">·</span>
-      <span className={active > 0 ? 'text-green-400' : 'text-slate-600'}>
-        {active} работают
-      </span>
+      <span className={active > 0 ? 'text-green-400' : 'text-slate-600'}>{active} работают</span>
       <span className="text-slate-700">·</span>
-      <span className={stuck > 0 ? 'text-red-400' : 'text-slate-600'}>
-        {stuck} застряли
-      </span>
+      <span className={stuck > 0 ? 'text-red-400' : 'text-slate-600'}>{stuck} застряли</span>
+    </div>
+  )
+}
+
+// ── Autorun Control Panel ──────────────────────────────────────────────────────
+
+const PRIORITY_ORDER: Record<string, number> = { high: 3, medium: 2, low: 1, none: 0 }
+
+function AutorunPanel() {
+  const [queue, setQueue]       = useState<Task[]>([])
+  const [loading, setLoading]   = useState(true)
+  const [sending, setSending]   = useState<string | null>(null) // 'stop' | 'pause'
+  const [lastAction, setLastAction] = useState<string | null>(null)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const fetchQueue = useCallback(async () => {
+    const { data } = await supabase
+      .from('tasks')
+      .select('id, title, status, priority, assignee, phase_number, work_type, context_readiness')
+      .eq('status', 'todo')
+      .eq('context_readiness', 'agent_ready')
+      .order('created_at', { ascending: true })
+      .limit(30)
+    if (data) {
+      const sorted = [...(data as Task[])].sort(
+        (a, b) => (PRIORITY_ORDER[b.priority] ?? 0) - (PRIORITY_ORDER[a.priority] ?? 0)
+      )
+      setQueue(sorted)
+    }
+    setLoading(false)
+  }, [])
+
+  useEffect(() => {
+    fetchQueue()
+    intervalRef.current = setInterval(fetchQueue, 10_000)
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+    }
+  }, [fetchQueue])
+
+  const sendCommand = async (type: 'autorun_stop' | 'autorun_pause') => {
+    setSending(type === 'autorun_stop' ? 'stop' : 'pause')
+    const { error } = await supabase
+      .from('agent_jobs')
+      .insert({ type, payload: {}, status: 'pending' })
+    setSending(null)
+    if (!error) {
+      setLastAction(type === 'autorun_stop' ? 'Команда Stop отправлена' : 'Команда Pause отправлена')
+      setTimeout(() => setLastAction(null), 4000)
+    }
+  }
+
+  const PRIORITY_DOT: Record<string, string> = {
+    high:   'bg-red-500',
+    medium: 'bg-amber-500',
+    low:    'bg-emerald-500',
+    none:   'bg-slate-600',
+  }
+
+  const ASSIGNEE_ICON: Record<string, string> = {
+    autorun: '🤖', pekar: '🍞', intaker: '🔧', nout: '🖥️', opus: '🧠', sonnet: '✨', artur: '👤',
+  }
+
+  return (
+    <div className="px-4 space-y-4 pb-8">
+      {/* Control buttons */}
+      <div className="bg-white/5 rounded-2xl border border-white/[0.06] p-4 space-y-3">
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">🎛 Управление Autorun</p>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => sendCommand('autorun_stop')}
+            disabled={sending !== null}
+            className="flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-sm border bg-red-900/20 text-red-400 border-red-700/30 hover:bg-red-900/30 disabled:opacity-50 transition-colors"
+          >
+            <Square size={14} />
+            {sending === 'stop' ? 'Отправка...' : 'Stop'}
+          </button>
+          <button
+            onClick={() => sendCommand('autorun_pause')}
+            disabled={sending !== null}
+            className="flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-sm border bg-amber-900/20 text-amber-400 border-amber-700/30 hover:bg-amber-900/30 disabled:opacity-50 transition-colors"
+          >
+            <Pause size={14} />
+            {sending === 'pause' ? 'Отправка...' : 'Pause'}
+          </button>
+        </div>
+        {lastAction && (
+          <p className="text-xs text-emerald-400 text-center">✅ {lastAction}</p>
+        )}
+        <p className="text-[10px] text-slate-600 text-center">
+          Команды отправляются через agent_jobs. Бот проверяет очередь при следующем цикле.
+        </p>
+      </div>
+
+      {/* Task queue */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between px-1">
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+            📋 Очередь задач
+          </p>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-slate-600">{queue.length} задач</span>
+            <button
+              onClick={fetchQueue}
+              className="text-slate-600 hover:text-slate-400 transition-colors"
+            >
+              <RefreshCw size={12} />
+            </button>
+          </div>
+        </div>
+
+        {loading ? (
+          <p className="text-sm text-slate-600 text-center py-6">Загрузка...</p>
+        ) : queue.length === 0 ? (
+          <div className="bg-white/[0.03] rounded-2xl border border-white/[0.05] px-4 py-8 text-center">
+            <p className="text-sm text-slate-600">Очередь пуста</p>
+            <p className="text-xs text-slate-700 mt-1">Задач со статусом todo + agent_ready нет</p>
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            {queue.map((task, i) => (
+              <div key={task.id} className="flex items-center gap-3 bg-white/[0.03] rounded-xl border border-white/[0.05] px-3 py-2.5">
+                <span className="text-[10px] text-slate-700 font-mono w-4 shrink-0">{i + 1}</span>
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${PRIORITY_DOT[task.priority] ?? 'bg-slate-600'}`} />
+                <p className="flex-1 text-xs text-slate-300 line-clamp-1">{task.title}</p>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {task.assignee && ASSIGNEE_ICON[task.assignee] && (
+                    <span className="text-xs">{ASSIGNEE_ICON[task.assignee]}</span>
+                  )}
+                  {task.phase_number != null && (
+                    <span className="text-[9px] text-slate-700">P{task.phase_number}</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -225,19 +414,18 @@ function SummaryBar({ agents }: { agents: Agent[] }) {
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 type AutorunPhase = 'idle' | 'inserting' | 'pending' | 'processing' | 'completed' | 'failed'
-
-type TabView = 'cards' | 'pipeline'
+type TabView = 'cards' | 'pipeline' | 'autorun'
 
 export default function AgentsPage() {
   const { agents, loading, refresh } = useAgents()
-  const [tab, setTab]             = useState<TabView>('cards')
-  const [phase, setPhase]         = useState<AutorunPhase>('idle')
-  const [jobId, setJobId]         = useState<string | null>(null)
-  const [jobError, setJobError]   = useState<string | null>(null)
+  const [tab, setTab]               = useState<TabView>('cards')
+  const [phase, setPhase]           = useState<AutorunPhase>('idle')
+  const [jobId, setJobId]           = useState<string | null>(null)
+  const [jobError, setJobError]     = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // ── Poll agent_jobs row until terminal state ──────────────────────────────
+  // Poll agent_jobs until terminal state
   useEffect(() => {
     if (!jobId || phase === 'idle' || phase === 'completed' || phase === 'failed') return
 
@@ -248,7 +436,6 @@ export default function AgentsPage() {
         .eq('id', jobId)
         .single()
       if (!data) return
-
       const s = data.status as string
       if (s === 'processing') {
         setPhase('processing')
@@ -267,29 +454,24 @@ export default function AgentsPage() {
     }
 
     pollRef.current = setInterval(poll, 5_000)
-    poll() // immediate first check
-    return () => {
-      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
-    }
+    poll()
+    return () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null } }
   }, [jobId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleStartAutorun = async () => {
     setPhase('inserting')
     setJobError(null)
-
     const { data, error } = await supabase
       .from('agent_jobs')
       .insert({ type: 'autorun_start', payload: { project: 'MAOS' }, status: 'pending' })
       .select('id')
       .single()
-
     if (error || !data) {
       setJobError(error?.message ?? 'Не удалось создать задачу')
       setPhase('failed')
       setTimeout(() => { setPhase('idle'); setJobError(null) }, 4000)
       return
     }
-
     setJobId(data.id as string)
     setPhase('pending')
   }
@@ -308,8 +490,13 @@ export default function AgentsPage() {
     completed:  { label: '✅ Autorun завершён',    cls: 'bg-emerald-900/50 text-emerald-400 border-emerald-700/40' },
     failed:     { label: '❌ Ошибка',              cls: 'bg-red-900/40 text-red-400 border-red-700/30' },
   }
-  const cfg = PHASE_CFG[phase]
-  const btnDisabled = phase !== 'idle'
+  const phaseCfg = PHASE_CFG[phase]
+
+  const TABS: { key: TabView; label: string }[] = [
+    { key: 'cards',    label: 'Карточки' },
+    { key: 'pipeline', label: 'Pipeline' },
+    { key: 'autorun',  label: '🎛 Управление' },
+  ]
 
   return (
     <div className="flex flex-col min-h-full pb-8">
@@ -324,47 +511,49 @@ export default function AgentsPage() {
             onClick={handleRefresh}
             disabled={refreshing || loading}
             className="text-slate-500 hover:text-slate-300 disabled:opacity-40 transition-colors p-1"
-            title="Обновить статусы"
           >
             <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
           </button>
         </div>
+
         {!loading && <SummaryBar agents={agents} />}
-        {/* Autorun trigger */}
+
+        {/* Autorun start button */}
         <button
           onClick={handleStartAutorun}
-          disabled={btnDisabled}
-          className={`w-full font-semibold rounded-xl py-3 text-sm transition-colors border ${cfg.cls} disabled:opacity-70`}
+          disabled={phase !== 'idle'}
+          className={`w-full flex items-center justify-center gap-2 font-semibold rounded-xl py-3 text-sm transition-colors border ${phaseCfg.cls} disabled:opacity-70`}
         >
-          {cfg.label}
+          {phase === 'idle' && <Play size={14} />}
+          {phaseCfg.label}
         </button>
-        {jobError && (
-          <p className="text-xs text-red-400 px-1">{jobError}</p>
-        )}
+        {jobError && <p className="text-xs text-red-400 px-1">{jobError}</p>}
+
         {/* Tab switcher */}
         <div className="flex gap-1 bg-white/[0.04] rounded-xl p-1">
-          {(['cards', 'pipeline'] as TabView[]).map(t => (
+          {TABS.map(t => (
             <button
-              key={t}
-              onClick={() => setTab(t)}
+              key={t.key}
+              onClick={() => setTab(t.key)}
               className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                tab === t ? 'bg-white/10 text-slate-100' : 'text-slate-500 hover:text-slate-300'
+                tab === t.key ? 'bg-white/10 text-slate-100' : 'text-slate-500 hover:text-slate-300'
               }`}
             >
-              {t === 'cards' ? 'Карточки' : 'Pipeline'}
+              {t.label}
             </button>
           ))}
         </div>
       </div>
 
+      {/* Tab content */}
       {loading ? (
-        <div className="flex items-center justify-center flex-1 py-20 text-slate-500 text-sm">
-          Загрузка...
-        </div>
+        <div className="flex items-center justify-center flex-1 py-20 text-slate-500 text-sm">Загрузка...</div>
       ) : tab === 'pipeline' ? (
         <div className="px-4">
           <PipelineTab agents={agents} />
         </div>
+      ) : tab === 'autorun' ? (
+        <AutorunPanel />
       ) : agents.length === 0 ? (
         <div className="flex flex-col items-center justify-center flex-1 py-20 space-y-2">
           <p className="text-3xl">🤖</p>

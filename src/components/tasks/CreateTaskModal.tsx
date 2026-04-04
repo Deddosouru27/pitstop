@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
-const MAOS_PROJECT_ID = 'f2896db9-8eeb-4a15-a49f-7b8571f09dfe'
+const MAOS_PROJECT_ID  = 'f2896db9-8eeb-4a15-a49f-7b8571f09dfe'
+const ACTIVE_CYCLE_PLAN_ID = '417af120-da13-4807-bec0-44d87e1cf2d3'
 
 const ASSIGNEES = [
   { value: 'autorun', label: 'Autorun' },
@@ -56,11 +57,13 @@ export default function CreateTaskModal({ onClose, onCreated }: Props) {
       assignee,
       work_type:    workType,
       phase_number: phaseNumber,
-      project_id:   MAOS_PROJECT_ID,
-      is_completed: false,
-      priority:     'none',
-      due_date:     null,
-      status:       'todo',
+      project_id:        MAOS_PROJECT_ID,
+      cycle_plan_id:     ACTIVE_CYCLE_PLAN_ID,
+      context_readiness: 'agent_ready',
+      is_completed:      false,
+      priority:          'none',
+      due_date:          null,
+      status:            'todo',
     })
 
     if (insertError) {

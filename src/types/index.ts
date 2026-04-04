@@ -98,6 +98,7 @@ export interface Task {
   work_type?: string | null
   created_by?: string
   assignee?: string | null
+  context_readiness?: string | null
   context?: TaskContext | null
   created_at: string
   updated_at: string
