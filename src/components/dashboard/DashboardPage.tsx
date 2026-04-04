@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase'
 import { useAgentStats } from '../../hooks/useAgentStats'
 import { useCyclePlan } from '../../hooks/useCyclePlan'
 import { useKnowledgeStats } from '../../hooks/useKnowledgeStats'
+import CycleVelocity from './CycleVelocity'
 import type { CyclePlanPhase, Task } from '../../types'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -70,6 +71,8 @@ function KnowledgeStatsWidget() {
   return (
     <div className="bg-white/5 rounded-2xl px-4 py-4 border border-white/[0.06] space-y-3">
       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">🧠 Knowledge Base</p>
+
+      {/* Row 1: total / hot / archive */}
       <div className="grid grid-cols-3 gap-2">
         <div className="text-center">
           <p className="text-xl font-bold text-slate-100">{stats.total}</p>
@@ -77,13 +80,26 @@ function KnowledgeStatsWidget() {
         </div>
         <div className="text-center">
           <p className="text-xl font-bold text-red-400">{stats.hot}</p>
-          <p className="text-[10px] text-slate-500 mt-0.5">🔥 горячих</p>
+          <p className="text-[10px] text-slate-500 mt-0.5">🔥 hot ({stats.hotPct}%)</p>
         </div>
         <div className="text-center">
           <p className="text-xl font-bold text-blue-400">{stats.archive}</p>
           <p className="text-[10px] text-slate-500 mt-0.5">📚 архив</p>
         </div>
       </div>
+
+      {/* Row 2: entities / edges */}
+      <div className="grid grid-cols-2 gap-2 pt-1 border-t border-white/[0.04]">
+        <div className="text-center">
+          <p className="text-base font-bold text-emerald-400">{stats.entities}</p>
+          <p className="text-[10px] text-slate-500 mt-0.5">🕸 entities</p>
+        </div>
+        <div className="text-center">
+          <p className="text-base font-bold text-cyan-400">{stats.edges}</p>
+          <p className="text-[10px] text-slate-500 mt-0.5">↔ edges</p>
+        </div>
+      </div>
+
       <div className="flex items-center justify-between pt-1 border-t border-white/[0.04]">
         <span className="text-[11px] text-slate-600">{stats.withEmbedding} с embedding</span>
         {stats.lastIngestedAt && (
@@ -1074,6 +1090,9 @@ export default function DashboardPage() {
 
         {/* Cycle 2 progress */}
         <CycleTwoWidget />
+
+        {/* Cycle velocity */}
+        <CycleVelocity />
 
         {/* Activity feed */}
         <ActivityFeed />

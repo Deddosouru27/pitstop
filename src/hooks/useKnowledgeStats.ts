@@ -1,24 +1,14 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 
-function toRouteArr(rt: unknown): string[] {
-  if (!rt) return []
-  if (Array.isArray(rt)) return rt as string[]
-  if (typeof rt === 'string') {
-    try { const p = JSON.parse(rt); return Array.isArray(p) ? p : [rt] } catch { return [rt] }
-  }
-  return []
-}
-
-function routedContains(rt: unknown, value: string): boolean {
-  return toRouteArr(rt).some(r => r.includes(value))
-}
-
 export interface KnowledgeStats {
   total: number
   withEmbedding: number
   hot: number
+  hotPct: number
   archive: number
+  entities: number
+  edges: number
   lastIngestedAt: string | null
 }
 
@@ -29,25 +19,33 @@ export function useKnowledgeStats() {
   useEffect(() => {
     let cancelled = false
     async function load() {
-      const [routedRes, embRes, lastRes] = await Promise.all([
-        supabase.from('extracted_knowledge').select('routed_to'),
-        supabase.from('extracted_knowledge').select('id', { count: 'exact', head: true }).not('embedding', 'is', null),
-        supabase.from('ingested_content').select('created_at').order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      const [totalRes, hotRes, archiveRes, embRes, entityRes, edgeRes, lastRes] = await Promise.all([
+        supabase.from('extracted_knowledge').select('*', { count: 'exact', head: true }),
+        supabase.from('extracted_knowledge').select('*', { count: 'exact', head: true })
+          .filter('routed_to::text', 'ilike', '%hot_backlog%'),
+        supabase.from('extracted_knowledge').select('*', { count: 'exact', head: true })
+          .filter('routed_to::text', 'ilike', '%knowledge_base%')
+          .not('routed_to::text', 'ilike', '%hot_backlog%'),
+        supabase.from('extracted_knowledge').select('*', { count: 'exact', head: true })
+          .not('embedding', 'is', null),
+        supabase.from('entity_nodes').select('*', { count: 'exact', head: true }),
+        supabase.from('entity_edges').select('*', { count: 'exact', head: true }),
+        supabase.from('ingested_content').select('created_at')
+          .order('created_at', { ascending: false }).limit(1).maybeSingle(),
       ])
       if (cancelled) return
 
-      const items = (routedRes.data ?? []) as Array<{ routed_to: unknown }>
-      const total = items.length
-      const hot = items.filter(i => routedContains(i.routed_to, 'hot_backlog')).length
-      const archive = items.filter(
-        i => routedContains(i.routed_to, 'knowledge_base') && !routedContains(i.routed_to, 'hot_backlog')
-      ).length
+      const total = totalRes.count ?? 0
+      const hot   = hotRes.count ?? 0
 
       setStats({
         total,
-        withEmbedding: embRes.count ?? 0,
+        withEmbedding:  embRes.count ?? 0,
         hot,
-        archive,
+        hotPct:         total > 0 ? Math.round(hot / total * 1000) / 10 : 0,
+        archive:        archiveRes.count ?? 0,
+        entities:       entityRes.count ?? 0,
+        edges:          edgeRes.count ?? 0,
         lastIngestedAt: lastRes.data?.created_at ?? null,
       })
       setLoading(false)
