@@ -54,6 +54,76 @@ function RepoBadge({ repo }: { repo: string | null }) {
   )
 }
 
+// ── Agent events section ───────────────────────────────────────────────────────
+
+interface AgentEvent {
+  event_type: string
+  details: Record<string, unknown> | null
+  created_at: string
+}
+
+const EVENT_CFG: Record<string, { dot: string; text: string }> = {
+  review_passed: { dot: 'bg-emerald-400', text: 'text-emerald-400' },
+  review_failed: { dot: 'bg-red-400',     text: 'text-red-400'     },
+  task_received: { dot: 'bg-blue-400',    text: 'text-blue-400'    },
+}
+
+function EventsSection({ agentId }: { agentId: string }) {
+  const [open, setOpen]     = useState(false)
+  const [events, setEvents] = useState<AgentEvent[] | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  const toggle = async () => {
+    if (!open && events === null) {
+      setLoading(true)
+      const { data } = await supabase
+        .from('agent_events')
+        .select('event_type, details, created_at')
+        .eq('agent_id', agentId)
+        .order('created_at', { ascending: false })
+        .limit(5)
+      setEvents((data ?? []) as AgentEvent[])
+      setLoading(false)
+    }
+    setOpen(v => !v)
+  }
+
+  return (
+    <div className="border-t border-white/[0.04] pt-2">
+      <button
+        onClick={toggle}
+        className="flex items-center justify-between w-full text-left"
+      >
+        <p className="text-[10px] text-slate-600 uppercase tracking-wider font-medium">
+          Последние события
+        </p>
+        <span className="text-[10px] text-slate-600">{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open && (
+        <div className="mt-2 space-y-1.5">
+          {loading ? (
+            <p className="text-[11px] text-slate-600">Загрузка...</p>
+          ) : !events || events.length === 0 ? (
+            <p className="text-[11px] text-slate-600 italic">Нет событий</p>
+          ) : events.map((ev, i) => {
+            const cfg = EVENT_CFG[ev.event_type]
+            return (
+              <div key={i} className="flex items-center gap-2">
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${cfg?.dot ?? 'bg-slate-600'}`} />
+                <span className={`flex-1 text-[11px] font-medium truncate ${cfg?.text ?? 'text-slate-500'}`}>
+                  {ev.event_type.replace(/_/g, ' ')}
+                </span>
+                <span className="text-[10px] text-slate-700 shrink-0">{timeAgo(ev.created_at)}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Agent card ─────────────────────────────────────────────────────────────────
 
 function AgentCard({ agent }: { agent: Agent }) {
@@ -118,6 +188,9 @@ function AgentCard({ agent }: { agent: Agent }) {
           {heartbeat}
         </p>
       </div>
+
+      {/* Events */}
+      <EventsSection agentId={agent.id} />
     </div>
   )
 }
