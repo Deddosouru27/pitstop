@@ -925,6 +925,10 @@ export default function DashboardPage() {
       </div>
 
       {captureOpen && <QuickCaptureModal onClose={() => setCaptureOpen(false)} />}
+
+      <p className="text-center text-[11px] text-slate-600 pt-6 pb-2">
+        MAOS v0.3 — Cycle 3
+      </p>
     </div>
   )
 }
