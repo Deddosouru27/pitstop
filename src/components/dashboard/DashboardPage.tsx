@@ -1004,6 +1004,107 @@ function TodayWidget() {
   )
 }
 
+// ── Agent Status widget ───────────────────────────────────────────────────────
+
+interface AgentEventRow {
+  id: string
+  agent_id: string | null
+  event_type: string
+  details: Record<string, unknown> | null
+  created_at: string
+  agentName: string
+}
+
+function AgentStatusWidget() {
+  const [rows, setRows]     = useState<AgentEventRow[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function load() {
+      const [eventsRes, agentsRes] = await Promise.all([
+        supabase
+          .from('agent_events')
+          .select('id, agent_id, event_type, details, created_at')
+          .order('created_at', { ascending: false })
+          .limit(5),
+        supabase
+          .from('agents')
+          .select('id, name'),
+      ])
+      if (cancelled) return
+
+      const nameMap: Record<string, string> = {}
+      for (const a of (agentsRes.data ?? []) as { id: string; name: string }[]) {
+        nameMap[a.id] = a.name
+      }
+
+      const enriched: AgentEventRow[] = ((eventsRes.data ?? []) as {
+        id: string; agent_id: string | null; event_type: string
+        details: Record<string, unknown> | null; created_at: string
+      }[]).map(ev => ({
+        ...ev,
+        agentName: ev.agent_id ? (nameMap[ev.agent_id] ?? ev.agent_id.slice(0, 8)) : '—',
+      }))
+
+      setRows(enriched)
+      setLoading(false)
+    }
+
+    load()
+    const interval = setInterval(load, 30_000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [])
+
+  if (loading) return null
+  if (rows.length === 0) return null
+
+  return (
+    <div className="bg-white/5 rounded-2xl border border-white/[0.06] overflow-hidden">
+      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 pt-4 pb-2">
+        🤖 Agent Status
+      </p>
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="border-b border-white/[0.06]">
+            <th className="text-left px-4 py-2 text-[10px] text-slate-600 font-medium uppercase tracking-wider">Время</th>
+            <th className="text-left px-4 py-2 text-[10px] text-slate-600 font-medium uppercase tracking-wider">Агент</th>
+            <th className="text-left px-4 py-2 text-[10px] text-slate-600 font-medium uppercase tracking-wider">Действие</th>
+            <th className="text-left px-4 py-2 text-[10px] text-slate-600 font-medium uppercase tracking-wider">Статус</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-white/[0.04]">
+          {rows.map(ev => {
+            const isOk = ev.event_type.includes('completed') || ev.event_type.includes('passed')
+            const isErr = ev.event_type.includes('failed') || ev.event_type.includes('error') || ev.event_type.includes('blocked')
+            return (
+              <tr key={ev.id} className="hover:bg-white/[0.02]">
+                <td className="px-4 py-2 text-slate-600 font-mono whitespace-nowrap">
+                  {new Date(ev.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                </td>
+                <td className="px-4 py-2 text-slate-300 truncate max-w-[80px]">{ev.agentName}</td>
+                <td className="px-4 py-2 text-slate-400 truncate max-w-[120px]">
+                  {ev.event_type.replace(/_/g, ' ')}
+                </td>
+                <td className="px-4 py-2">
+                  <span className={`text-[10px] font-semibold ${
+                    isOk  ? 'text-emerald-400' :
+                    isErr ? 'text-red-400' :
+                    'text-slate-500'
+                  }`}>
+                    {isOk ? '✓' : isErr ? '✗' : '·'}
+                  </span>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 // ── CEO Briefing widget ───────────────────────────────────────────────────────
 
 interface CeoBriefingData {
@@ -1208,6 +1309,9 @@ export default function DashboardPage() {
 
         {/* Today's activity */}
         <TodayWidget />
+
+        {/* Agent Status */}
+        <AgentStatusWidget />
 
         {/* CEO Briefing */}
         <CeoBriefingWidget />
