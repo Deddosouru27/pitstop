@@ -28,6 +28,7 @@ interface AgentRow {
   id: string
   name: string
   status: string | null
+  agent_role: string | null
   current_task_id: string | null
   last_heartbeat: string | null
 }
@@ -37,6 +38,27 @@ interface AgentCard extends AgentRow {
   minutesSinceHeartbeat: number | null
   doneToday: number
   inProgress: number
+}
+
+// ── Role badge config ─────────────────────────────────────────────────────────
+
+const ROLE_BADGE: Record<string, { cls: string; label: string }> = {
+  ceo:          { cls: 'bg-emerald-900/50 text-emerald-400 border border-emerald-700/30', label: 'CEO' },
+  coder:        { cls: 'bg-blue-900/50 text-blue-400 border border-blue-700/30',         label: 'Coder' },
+  tester:       { cls: 'bg-orange-900/50 text-orange-400 border border-orange-700/30',   label: 'Tester' },
+  orchestrator: { cls: 'bg-purple-900/50 text-purple-400 border border-purple-700/30',   label: 'Orchestrator' },
+  strategist:   { cls: 'bg-yellow-900/50 text-yellow-400 border border-yellow-700/30',   label: 'Strategist' },
+}
+
+function RoleBadge({ role }: { role: string | null }) {
+  if (!role) return null
+  const cfg = ROLE_BADGE[role.toLowerCase()]
+  if (!cfg) return null
+  return (
+    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${cfg.cls}`}>
+      {cfg.label}
+    </span>
+  )
 }
 
 interface AgentEvent {
@@ -111,10 +133,11 @@ function AgentCardRow({ agent }: { agent: AgentCard }) {
 
   return (
     <div className={`bg-white/[0.03] rounded-2xl border ${cfg.border} p-4 space-y-2.5`}>
-      {/* Header: name + status */}
+      {/* Header: name + role badge + status */}
       <div className="flex items-center gap-2.5">
         <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${cfg.dot}`} />
         <p className="flex-1 text-sm font-bold text-slate-200 truncate">{agent.name}</p>
+        <RoleBadge role={agent.agent_role} />
         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
           agent.status === 'working' ? 'bg-emerald-900/50 text-emerald-400' :
           agent.status === 'failed'  ? 'bg-red-900/50 text-red-400' :
@@ -284,7 +307,7 @@ export default function AgentMonitorPage() {
     // 1. Agents
     const { data: agentRows } = await supabase
       .from('agents')
-      .select('id, name, status, current_task_id, last_heartbeat')
+      .select('id, name, status, agent_role, current_task_id, last_heartbeat')
       .order('name')
 
     const rawAgents = (agentRows ?? []) as AgentRow[]

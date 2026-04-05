@@ -7,7 +7,7 @@ import { useAgentStats } from '../../hooks/useAgentStats'
 import { useCyclePlan } from '../../hooks/useCyclePlan'
 import { useKnowledgeStats } from '../../hooks/useKnowledgeStats'
 import CycleVelocity from './CycleVelocity'
-import type { CyclePlanPhase, Task } from '../../types'
+import type { CyclePlanPhase, Task, GoalChain } from '../../types'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -233,6 +233,41 @@ const ASSIGNEE_LABEL: Record<string, string> = {
   user:   'Артур',
 }
 
+// ── Goal chain breadcrumb ─────────────────────────────────────────────────────
+
+const GOAL_CHAIN_STEPS: Array<{ key: keyof GoalChain; label: string }> = [
+  { key: 'mission', label: 'Mission' },
+  { key: 'block',   label: 'Block' },
+  { key: 'cycle',   label: 'Cycle' },
+  { key: 'phase',   label: 'Phase' },
+  { key: 'task',    label: 'Task' },
+]
+
+function GoalChainBreadcrumb({ chain }: { chain: GoalChain }) {
+  const steps = GOAL_CHAIN_STEPS.filter(s => chain[s.key])
+  if (steps.length === 0) return null
+
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {steps.map((s, i) => {
+        const isLast = i === steps.length - 1
+        return (
+          <div key={s.key} className="flex items-center gap-1">
+            <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+              isLast
+                ? 'bg-purple-600/30 text-purple-300 border border-purple-600/40'
+                : 'bg-white/[0.06] text-slate-500 border border-white/[0.06]'
+            }`}>
+              {chain[s.key]}
+            </span>
+            {!isLast && <span className="text-[9px] text-slate-700">›</span>}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function TaskDetailModal({ task, onClose }: { task: Task; onClose: () => void }) {
   const cfg = TASK_STATUS_CFG[task.status ?? 'backlog'] ?? TASK_STATUS_CFG.backlog
   return (
@@ -263,6 +298,12 @@ function TaskDetailModal({ task, onClose }: { task: Task; onClose: () => void })
         </div>
         <div className="flex-1 overflow-y-auto px-5 pb-8 space-y-3">
           <p className="text-slate-100 text-base font-semibold leading-snug">{task.title}</p>
+
+          {/* Goal chain breadcrumb */}
+          {task.context?.goal_chain && (
+            <GoalChainBreadcrumb chain={task.context.goal_chain} />
+          )}
+
           {task.description ? (
             <p className="text-slate-400 text-sm leading-relaxed whitespace-pre-wrap">{task.description}</p>
           ) : (
@@ -963,6 +1004,146 @@ function TodayWidget() {
   )
 }
 
+// ── CEO Briefing widget ───────────────────────────────────────────────────────
+
+interface CeoBriefingData {
+  system_health?: string | null
+  active_cycle?: {
+    name?: string | null
+    done?: number
+    total?: number
+    todo?: number
+  } | null
+  top_findings?: Array<{ summary?: string; type?: string }> | null
+  blocked_tasks?: Array<{ title?: string; reason?: string }> | null
+  recent_completed?: Array<{ title?: string; completed_at?: string }> | null
+  planning_health?: string | null
+}
+
+function CeoBriefingWidget() {
+  const [data, setData]     = useState<CeoBriefingData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError]   = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function load() {
+      const { data: result, error: err } = await supabase.rpc('ceo_briefing')
+      if (cancelled) return
+      if (err || !result) { setError(true); setLoading(false); return }
+      setData(result as CeoBriefingData)
+      setLoading(false)
+    }
+
+    load()
+    const interval = setInterval(load, 60_000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [])
+
+  if (loading || error || !data) return null
+
+  const cycle = data.active_cycle
+  const cyclePct = cycle && cycle.total && cycle.total > 0
+    ? Math.round((cycle.done ?? 0) / cycle.total * 100)
+    : null
+
+  const healthColor =
+    data.system_health === 'healthy'  ? 'text-emerald-400' :
+    data.system_health === 'degraded' ? 'text-amber-400' :
+    data.system_health === 'critical' ? 'text-red-400' :
+    'text-slate-400'
+
+  const recent = (data.recent_completed ?? []).slice(0, 3)
+  const blocked = (data.blocked_tasks ?? [])
+  const findings = (data.top_findings ?? [])
+
+  return (
+    <div className="bg-white/[0.04] rounded-2xl border border-white/[0.06] px-4 py-4 space-y-3">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+          👑 CEO Briefing
+        </p>
+        {data.system_health && (
+          <span className={`text-[10px] font-semibold uppercase tracking-wider ${healthColor}`}>
+            {data.system_health}
+          </span>
+        )}
+      </div>
+
+      {/* Cycle progress */}
+      {cycle && (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-slate-300 font-medium truncate">{cycle.name ?? 'Active cycle'}</p>
+            <span className="text-[11px] text-slate-500 shrink-0 ml-2">
+              {cycle.done ?? 0}/{cycle.total ?? 0} · {cyclePct ?? 0}%
+            </span>
+          </div>
+          <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full bg-purple-500 transition-all"
+              style={{ width: `${cyclePct ?? 0}%` }}
+            />
+          </div>
+          {(cycle.todo ?? 0) > 0 && (
+            <p className="text-[10px] text-slate-600">{cycle.todo} задач в очереди</p>
+          )}
+        </div>
+      )}
+
+      {/* Stats row: findings + blocked */}
+      <div className="grid grid-cols-2 gap-2 pt-1 border-t border-white/[0.04]">
+        <div className="flex items-center gap-2">
+          <span className="text-sm">🔍</span>
+          <div>
+            <p className={`text-sm font-bold leading-none ${findings.length > 0 ? 'text-amber-400' : 'text-slate-600'}`}>
+              {findings.length}
+            </p>
+            <p className="text-[10px] text-slate-600 mt-0.5">findings</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm">🚫</span>
+          <div>
+            <p className={`text-sm font-bold leading-none ${blocked.length > 0 ? 'text-red-400' : 'text-slate-600'}`}>
+              {blocked.length}
+            </p>
+            <p className="text-[10px] text-slate-600 mt-0.5">заблокировано</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Recent completed */}
+      {recent.length > 0 && (
+        <div className="space-y-1 pt-1 border-t border-white/[0.04]">
+          <p className="text-[10px] text-slate-600 uppercase tracking-wider">Недавно завершено</p>
+          {recent.map((t, i) => (
+            <div key={i} className="flex items-start gap-2">
+              <span className="text-[10px] mt-0.5 shrink-0">✅</span>
+              <p className="text-[11px] text-slate-400 leading-snug line-clamp-1">{t.title ?? '—'}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Blocked tasks preview */}
+      {blocked.length > 0 && (
+        <div className="space-y-1 pt-1 border-t border-white/[0.04]">
+          <p className="text-[10px] text-slate-600 uppercase tracking-wider">Блокеры</p>
+          {blocked.slice(0, 2).map((t, i) => (
+            <div key={i} className="flex items-start gap-2">
+              <span className="text-[10px] mt-0.5 shrink-0">🚫</span>
+              <p className="text-[11px] text-red-400/80 leading-snug line-clamp-1">{t.title ?? '—'}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 // ── Quick Actions ─────────────────────────────────────────────────────────────
@@ -1027,6 +1208,9 @@ export default function DashboardPage() {
 
         {/* Today's activity */}
         <TodayWidget />
+
+        {/* CEO Briefing */}
+        <CeoBriefingWidget />
 
         {/* Stat cards */}
         <div className="grid grid-cols-2 gap-2">

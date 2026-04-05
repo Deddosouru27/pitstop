@@ -72,6 +72,14 @@ export interface Project {
   updated_at: string
 }
 
+export interface GoalChain {
+  mission?: string | null
+  block?: string | null
+  cycle?: string | null
+  phase?: string | null
+  task?: string | null
+}
+
 export interface TaskContext {
   what?: string | null
   why?: string | null
@@ -81,6 +89,7 @@ export interface TaskContext {
   acceptance?: string | null
   risks?: string | null
   dependencies?: string | null
+  goal_chain?: GoalChain | null
 }
 
 export interface Task {

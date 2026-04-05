@@ -35,7 +35,7 @@ function fmtDate(dateStr: string): string {
 
 // ── Node types ─────────────────────────────────────────────────────────────────
 
-type AgentNodeData = { name: string; role: string; status: AgentStatus }
+type AgentNodeData = { name: string; role: string; agent_role: string | null; status: AgentStatus }
 type AgentFlowNode = Node<AgentNodeData, 'agentNode'>
 
 const STATUS_DOT: Record<AgentStatus, string> = {
@@ -54,15 +54,33 @@ const STATUS_BORDER: Record<AgentStatus, string> = {
   offline: 'border-white/5',
 }
 
+const AGENT_ROLE_BADGE: Record<string, { bg: string; text: string }> = {
+  ceo:          { bg: '#052e16', text: '#4ade80' },
+  coder:        { bg: '#0c1a3a', text: '#60a5fa' },
+  tester:       { bg: '#2a1200', text: '#fb923c' },
+  orchestrator: { bg: '#1e0d3a', text: '#c084fc' },
+  strategist:   { bg: '#1c1500', text: '#facc15' },
+}
+
 function AgentNodeComp({ data }: NodeProps<AgentFlowNode>) {
+  const roleCfg = data.agent_role ? (AGENT_ROLE_BADGE[data.agent_role.toLowerCase()] ?? null) : null
   return (
-    <div className={`bg-[#1a1a2e] border rounded-2xl px-4 py-3 w-44 shadow-xl ${STATUS_BORDER[data.status]}`}>
+    <div className={`border rounded-2xl px-4 py-3 w-44 shadow-xl ${STATUS_BORDER[data.status]}`}
+      style={{ background: roleCfg ? roleCfg.bg : '#1a1a2e' }}>
       <Handle type="target" position={Position.Left} style={{ background: '#4f4f7a', border: 'none', width: 8, height: 8 }} />
       <div className="flex items-center gap-2 mb-1">
         <span className={`w-2 h-2 rounded-full shrink-0 ${STATUS_DOT[data.status]}`} />
         <p className="text-sm font-bold text-slate-100 truncate">{data.name}</p>
       </div>
-      <p className="text-[10px] text-slate-500 leading-tight truncate">{data.role}</p>
+      <div className="flex items-center gap-1.5">
+        <p className="text-[10px] text-slate-500 leading-tight truncate flex-1">{data.role}</p>
+        {roleCfg && data.agent_role && (
+          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0"
+            style={{ background: `${roleCfg.text}20`, color: roleCfg.text }}>
+            {data.agent_role.charAt(0).toUpperCase() + data.agent_role.slice(1)}
+          </span>
+        )}
+      </div>
       <Handle type="source" position={Position.Right} style={{ background: '#4f4f7a', border: 'none', width: 8, height: 8 }} />
     </div>
   )
@@ -210,7 +228,7 @@ export default function PipelineTab({ agents }: { agents: Agent[] }) {
       id:       a.id,
       type:     'agentNode' as const,
       position: gridPos(i),
-      data:     { name: a.name, role: a.role, status: a.status },
+      data:     { name: a.name, role: a.role, agent_role: a.agent_role, status: a.status },
     }))
 
     // 6. Build edges (dedupe by pair, keep most recent)

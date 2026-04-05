@@ -7,6 +7,7 @@ export interface Agent {
   id: string
   name: string
   role: string
+  agent_role: string | null
   capabilities: string[]
   status: AgentStatus
   current_task_id: string | null
@@ -23,7 +24,7 @@ export function useAgents() {
   async function load() {
     const { data: rows } = await supabase
       .from('agents')
-      .select('id, name, role, capabilities, status, current_task_id, last_heartbeat, repo, created_at')
+      .select('id, name, role, agent_role, capabilities, status, current_task_id, last_heartbeat, repo, created_at')
       .order('created_at')
 
     if (!rows) { setLoading(false); return }
@@ -47,6 +48,7 @@ export function useAgents() {
       id: r.id as string,
       name: r.name as string,
       role: r.role as string,
+      agent_role: (r.agent_role as string | null) ?? null,
       capabilities: Array.isArray(r.capabilities) ? (r.capabilities as string[]) : [],
       status: (r.status ?? 'offline') as AgentStatus,
       current_task_id: (r.current_task_id as string | null) ?? null,

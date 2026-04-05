@@ -82,7 +82,7 @@ function TaskContextBlock({ context }: { context?: TaskContext | null }) {
     <div className="space-y-1.5">
       {CONTEXT_FIELDS.map(({ key, label }) => {
         const value = context[key]
-        if (!value) return null
+        if (!value || typeof value !== 'string') return null
         return (
           <div key={key}>
             <span className="text-[11px] text-slate-500 uppercase">{label}</span>
