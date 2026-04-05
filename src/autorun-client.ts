@@ -11,6 +11,60 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { execSync, spawn, ChildProcess } from 'child_process';
+import https from 'https';
+
+// ============================================================
+// TELEGRAM NOTIFIER
+// ============================================================
+
+// Sends a message via Telegram Bot API. Silently no-ops if env vars missing.
+async function sendTelegram(text: string): Promise<void> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) return;
+
+  const body = JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' });
+  const options = {
+    hostname: 'api.telegram.org',
+    path: `/bot${token}/sendMessage`,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+  };
+
+  return new Promise<void>(resolve => {
+    const req = https.request(options, res => {
+      res.resume();
+      resolve();
+    });
+    req.on('error', () => resolve()); // never throw — notifications are best-effort
+    req.setTimeout(5000, () => { req.destroy(); resolve(); });
+    req.write(body);
+    req.end();
+  });
+}
+
+// ============================================================
+// TASK SAFETY GUARD
+// ============================================================
+
+// Keywords in task title/description that signal potentially destructive ops.
+// Autorun will skip tasks matching these patterns and flag them for human review.
+const UNSAFE_PATTERNS = [
+  /\bdrop\s+table\b/i,
+  /\bdelete\s+from\b/i,
+  /\btruncate\b/i,
+  /\brm\s+-rf\b/i,
+  /\bgit\s+push\s+--force\b/i,
+  /\bgit\s+reset\s+--hard\b/i,
+  /\bdeploy\s+to\s+prod/i,
+  /\bwipe\b.*\bdatabase\b/i,
+  /\bpurge\b.*\bdata\b/i,
+];
+
+function isTaskSafe(task: TaskRow): boolean {
+  const text = `${task.title} ${task.description ?? ''}`;
+  return !UNSAFE_PATTERNS.some(re => re.test(text));
+}
 
 // ============================================================
 // CONFIG
@@ -163,7 +217,17 @@ export class AutorunClient {
       const task = await this.getNextTask();
       if (!task) return;
 
+      // Safety guard — skip tasks with destructive patterns
+      if (!isTaskSafe(task)) {
+        console.log(`[AUTORUN] ⚠️ UNSAFE task skipped: ${task.title}`);
+        await this.supabase.from('tasks').update({ status: 'blocked', context: { blocked_reason: 'autorun_safety_guard: destructive pattern detected' } }).eq('id', task.task_id);
+        await sendTelegram(`⚠️ <b>MAOS Safety Guard</b>\nTask skipped (unsafe): <code>${task.title}</code>\nAgent: ${this.config.agentName}`);
+        await this.logEvent('task_skipped_unsafe', { task_id: task.task_id, task_title: task.title });
+        return;
+      }
+
       console.log(`[AUTORUN] Task: ${task.title}`);
+      await sendTelegram(`🔵 <b>${this.config.agentName}</b> started:\n<code>${task.title}</code>`);
       await this.logEvent('task_started', { task_id: task.task_id, task_title: task.title });
 
       // Execute
@@ -183,6 +247,7 @@ export class AutorunClient {
           result: 'success',
         });
         console.log(`[AUTORUN] ✅ ${task.title} (${durationSec}s)`);
+        await sendTelegram(`✅ <b>${this.config.agentName}</b> done (${durationSec}s):\n<code>${task.title}</code>`);
 
         // Write WAA
         await this.writeWAA(task, 'success', durationSec);
@@ -356,6 +421,7 @@ When done, make sure all changes are saved.`;
         duration_seconds: durationSec,
       });
       console.log(`[AUTORUN] 🚫 Blocked: ${task.title} (${failCount}x fail)`);
+      await sendTelegram(`🚫 <b>BLOCKED</b>: <code>${task.title}</code>\n${failCount}x fail — agent: ${this.config.agentName}`);
     } else {
       // Return to todo
       await this.supabase
@@ -470,6 +536,8 @@ Respond in JSON format:
 
     if (reviewResult) {
       console.log(`[AUTORUN] 👑 CEO: ${reviewResult.summary}`);
+      const statusIcon = reviewResult.on_track ? '✅' : '⚠️';
+      await sendTelegram(`👑 <b>CEO Review</b> (${batch.length} tasks)\n${statusIcon} ${reviewResult.summary}${reviewResult.priority_changes ? `\n📌 ${reviewResult.priority_changes}` : ''}${reviewResult.blocker ? `\n🚫 Blocker created: <code>${reviewResult.blocker.title}</code>` : ''}`);
 
       // Create blocker task if CEO flagged one
       if (reviewResult.blocker) {
@@ -641,8 +709,21 @@ if (__isMain) {
     repoPath,
   });
 
-  client.start();
+  // Crash failsafe — notify CEO via Telegram on uncaught errors
+  const crashHandler = async (err: unknown, origin: string) => {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[AUTORUN] 💥 CRASH (${origin}): ${msg}`);
+    await sendTelegram(`💥 <b>AUTORUN CRASH</b>\nAgent: ${agentName} | Repo: ${repoName}\nOrigin: ${origin}\n<code>${msg.slice(0, 300)}</code>`);
+  };
 
-  process.on('SIGINT', () => client.stop());
-  process.on('SIGTERM', () => client.stop());
+  process.on('uncaughtException', (err, origin) => { void crashHandler(err, origin); });
+  process.on('unhandledRejection', (reason) => { void crashHandler(reason, 'unhandledRejection'); });
+  process.on('SIGINT', () => {
+    void sendTelegram(`🛑 <b>Autorun stopped</b>\nAgent: ${agentName} (SIGINT)`).then(() => client.stop());
+  });
+  process.on('SIGTERM', () => {
+    void sendTelegram(`🛑 <b>Autorun stopped</b>\nAgent: ${agentName} (SIGTERM)`).then(() => client.stop());
+  });
+
+  client.start();
 }
