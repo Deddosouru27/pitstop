@@ -27,6 +27,7 @@ interface AutorunConfig {
   heartbeatMs?: number;    // default 60000 (60s)
   maxTaskDurationMs?: number; // default 1800000 (30 min)
   maxFailCount?: number;   // default 2
+  reviewInterval?: number; // tasks done between CEO periodic reviews, default 3
 }
 
 interface TaskRow {
@@ -53,6 +54,7 @@ export class AutorunClient {
   private tasksCompleted = 0;
   private errorsCount = 0;
   private sessionCostUsd = 0;
+  private doneSinceLastReview: Array<{ task_id: string; title: string }> = [];
 
   constructor(config: AutorunConfig) {
     this.config = {
@@ -62,6 +64,7 @@ export class AutorunClient {
       heartbeatMs: 60000,
       maxTaskDurationMs: 30 * 60 * 1000,
       maxFailCount: 2,
+      reviewInterval: 3,
       ...config,
     };
 
@@ -172,6 +175,7 @@ export class AutorunClient {
         // Mark done with outcome
         await this.completeTask(task, durationSec);
         this.tasksCompleted++;
+        this.doneSinceLastReview.push({ task_id: task.task_id, title: task.title });
         await this.logEvent('task_completed', {
           task_id: task.task_id,
           task_title: task.title,
@@ -182,6 +186,11 @@ export class AutorunClient {
 
         // Write WAA
         await this.writeWAA(task, 'success', durationSec);
+
+        // CEO periodic review every N tasks
+        if (this.doneSinceLastReview.length >= this.config.reviewInterval) {
+          await this.performPeriodicReview();
+        }
       } else {
         // Handle failure
         await this.handleFailure(task, durationSec);
@@ -382,6 +391,115 @@ When done, make sure all changes are saved.`;
         what_changed: [this.config.repoName],
         duration_minutes: Math.round(durationSec / 60),
       },
+    });
+  }
+
+  // ----------------------------------------------------------
+  // CEO PERIODIC REVIEW
+  // ----------------------------------------------------------
+
+  private async performPeriodicReview(): Promise<void> {
+    const batch = [...this.doneSinceLastReview];
+    this.doneSinceLastReview = [];
+
+    const taskList = batch.map((t, i) => `${i + 1}. ${t.title}`).join('\n');
+    console.log(`[AUTORUN] 👑 CEO review — ${batch.length} tasks completed`);
+
+    const prompt = `You are the CEO of MAOS (Multi-Agent Operating System).
+
+Review progress of the last ${batch.length} completed tasks:
+
+${taskList}
+
+Answer these questions concisely:
+1. Is progress on track? Any patterns or concerns?
+2. Should priorities change for the next tasks?
+3. Are there any blockers that need a dedicated blocker task created?
+
+Respond in JSON format:
+{
+  "on_track": true/false,
+  "summary": "brief assessment",
+  "priority_changes": "description or null",
+  "blocker": { "title": "...", "description": "..." } or null
+}`;
+
+    let reviewResult: {
+      on_track: boolean;
+      summary: string;
+      priority_changes: string | null;
+      blocker: { title: string; description: string } | null;
+    } | null = null;
+
+    try {
+      const output = await new Promise<string>((resolve, reject) => {
+        let out = '';
+        const proc = spawn('claude', ['-p', prompt, '--output-format', 'text'], {
+          cwd: this.config.repoPath,
+          stdio: ['ignore', 'pipe', 'pipe'],
+          env: { ...process.env },
+        });
+        proc.stdout?.on('data', (d: Buffer) => { out += d.toString(); });
+        proc.stderr?.on('data', (d: Buffer) => { out += d.toString(); });
+        proc.on('close', () => resolve(out));
+        proc.on('error', reject);
+        // 5 min max for CEO review
+        setTimeout(() => { proc.kill('SIGTERM'); resolve(out); }, 5 * 60 * 1000);
+      });
+
+      // Extract JSON from output
+      const match = output.match(/\{[\s\S]*\}/);
+      if (match) {
+        reviewResult = JSON.parse(match[0]);
+      }
+    } catch (err: any) {
+      console.error(`[AUTORUN] CEO review error: ${err.message}`);
+    }
+
+    // Write snapshot regardless
+    await this.supabase.from('context_snapshots').insert({
+      snapshot_type: 'agent_action',
+      content: {
+        action: 'periodic_review',
+        agent: 'ceo',
+        tasks_reviewed: batch,
+        result: reviewResult ?? { summary: 'Review completed', on_track: true, priority_changes: null, blocker: null },
+        reviewed_at: new Date().toISOString(),
+      },
+    });
+
+    if (reviewResult) {
+      console.log(`[AUTORUN] 👑 CEO: ${reviewResult.summary}`);
+
+      // Create blocker task if CEO flagged one
+      if (reviewResult.blocker) {
+        const { data: activeCycle } = await this.supabase
+          .from('cycle_plans')
+          .select('id')
+          .eq('status', 'active')
+          .limit(1)
+          .maybeSingle();
+
+        await this.supabase.from('tasks').insert({
+          title: reviewResult.blocker.title,
+          description: reviewResult.blocker.description,
+          status: 'todo',
+          work_type: 'blocker',
+          priority: 'high',
+          cycle_plan_id: activeCycle?.id ?? null,
+          assignee: this.config.agentName,
+          created_by: 'ceo_autorun',
+        });
+
+        console.log(`[AUTORUN] 🚫 CEO created blocker: ${reviewResult.blocker.title}`);
+      }
+    }
+
+    await this.logEvent('ceo_review_completed', {
+      tasks_reviewed: batch.length,
+      on_track: reviewResult?.on_track ?? null,
+      summary: reviewResult?.summary ?? null,
+      blocker_created: reviewResult?.blocker != null,
     });
   }
 
