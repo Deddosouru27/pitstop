@@ -33,7 +33,6 @@ export function useTasks() {
         .from('tasks')
         .select('*')
         .order('created_at', { ascending: false })
-      console.log('[fetch]', 'tasks', null, data?.length ?? 0, 'items')
       if (data) setTasks(data)
       setLoading(false)
     })()
@@ -150,24 +149,32 @@ export function useTasks() {
       }
     }
 
-    // Background DB sync
-    supabase.from('tasks').update({
+    // Background DB sync — rollback UI on failure
+    const { error } = await supabase.from('tasks').update({
       is_completed: completed,
       status:       completed ? 'done' : 'todo',
       completed_at: completed ? now : null,
       updated_at:   now,
     }).eq('id', id)
+
+    if (error) {
+      console.error('[completeTask] DB sync failed:', error.message)
+      // Rollback optimistic update
+      setTasks(prev => prev.map(t =>
+        t.id === id
+          ? { ...t, is_completed: !completed, status: !completed ? 'done' : 'todo', completed_at: !completed ? now : null, updated_at: now }
+          : t
+      ))
+    }
   }, [])
 
   const deleteTask = useCallback(async (id: string): Promise<void> => {
     const toRestore = tasksRef.current.find(t => t.id === id)
-    console.log('[delete]', 'task', id)
 
     // Optimistic remove
     setTasks(prev => prev.filter(t => t.id !== id))
 
     const { error } = await supabase.from('tasks').delete().eq('id', id)
-    console.log('[delete response]', 'task', id, error)
 
     // Rollback on failure
     if (error && toRestore) {
