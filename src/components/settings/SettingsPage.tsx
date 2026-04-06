@@ -215,7 +215,7 @@ export default function SettingsPage() {
             { label: 'Pitstop Vercel', href: 'https://pitstop.vercel.app' },
             { label: 'Intake Vercel', href: 'https://maos-intake.vercel.app' },
             { label: 'Supabase Pitstop', href: 'https://supabase.com/dashboard/project/stqhnkhcfndmhgvfyojv' },
-            { label: 'GitHub', href: 'https://github.com' },
+            { label: 'GitHub', href: 'https://github.com/Deddosouru27' },
           ].map(({ label, href }) => (
             <a
               key={label}
