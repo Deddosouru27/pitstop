@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react'
-import { Inbox, X, ExternalLink, Search } from 'lucide-react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
+import { Inbox, X, ExternalLink, Search, ShieldAlert, RotateCcw } from 'lucide-react'
 import { useIngestedContent } from '../../hooks/useIngestedContent'
+import { supabase } from '../../lib/supabase'
 import type { IngestedContent } from '../../types'
 
 const SOURCE_TYPE_CFG: Record<string, { label: string; cls: string }> = {
@@ -167,6 +168,110 @@ function IngestedCard({ item, attempts, onOpen }: { item: IngestedContent; attem
   )
 }
 
+// ── Quarantined section ───────────────────────────────────────────────────────
+
+const REASON_LABEL: Record<string, string> = {
+  low_score:       'Низкий score',
+  high_score:      'Подозрительно высокий score',
+  empty_entities:  'Нет entities',
+}
+
+function QuarantinedSection() {
+  const [rows, setRows]         = useState<IngestedContent[]>([])
+  const [loading, setLoading]   = useState(true)
+  const [restoring, setRestoring] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    const { data } = await supabase
+      .from('ingested_content')
+      .select('id, source_url, quarantine_reason, created_at')
+      .eq('quarantined', true)
+      .order('created_at', { ascending: false })
+      .limit(50)
+    setRows((data ?? []) as IngestedContent[])
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { void load() }, [load])
+
+  const restore = async (id: string) => {
+    setRestoring(id)
+    const { error } = await supabase
+      .from('ingested_content')
+      .update({ quarantined: false, quarantine_reason: null, processing_status: 'done' })
+      .eq('id', id)
+    if (!error) setRows(prev => prev.filter(r => r.id !== id))
+    setRestoring(null)
+  }
+
+  if (!loading && rows.length === 0) return null
+
+  return (
+    <div className="px-4 pb-4">
+      <div className="bg-amber-900/10 rounded-2xl border border-amber-700/25 overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-amber-700/20">
+          <ShieldAlert size={14} className="text-amber-400 shrink-0" />
+          <p className="text-xs font-semibold text-amber-400 uppercase tracking-wider flex-1">
+            Карантин
+          </p>
+          <span className="text-[10px] text-amber-600">{loading ? '…' : rows.length}</span>
+        </div>
+
+        {loading ? (
+          <div className="px-4 py-6 text-center text-xs text-slate-600">Загрузка...</div>
+        ) : (
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-white/[0.04]">
+                <th className="text-left px-4 py-2 text-[10px] text-slate-600 font-medium uppercase tracking-wider">URL</th>
+                <th className="text-left px-4 py-2 text-[10px] text-slate-600 font-medium uppercase tracking-wider">Причина</th>
+                <th className="text-left px-4 py-2 text-[10px] text-slate-600 font-medium uppercase tracking-wider">Дата</th>
+                <th className="px-4 py-2" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/[0.04]">
+              {rows.map(row => (
+                <tr key={row.id} className="hover:bg-white/[0.02]">
+                  <td className="px-4 py-2.5 max-w-[140px]">
+                    <span className="text-slate-400 truncate block text-[11px]" title={row.source_url ?? ''}>
+                      {row.source_url
+                        ? row.source_url.replace(/^https?:\/\/(www\.)?/, '').slice(0, 40)
+                        : <span className="text-slate-600 italic">—</span>
+                      }
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5 whitespace-nowrap">
+                    <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-900/40 text-amber-400">
+                      {REASON_LABEL[row.quarantine_reason ?? ''] ?? (row.quarantine_reason ?? '—')}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5 whitespace-nowrap text-slate-600 font-mono text-[10px]">
+                    {new Date(row.created_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}
+                    {' '}
+                    {new Date(row.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                  </td>
+                  <td className="px-4 py-2.5 text-right">
+                    <button
+                      onClick={() => void restore(row.id)}
+                      disabled={restoring === row.id}
+                      className="flex items-center gap-1 text-[10px] font-medium text-slate-400 hover:text-emerald-400 disabled:opacity-40 transition-colors ml-auto"
+                      title="Restore"
+                    >
+                      <RotateCcw size={11} className={restoring === row.id ? 'animate-spin' : ''} />
+                      Restore
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function IngestedPage() {
   const { items, loading, error } = useIngestedContent()
   const [search, setSearch] = useState('')
@@ -221,6 +326,8 @@ export default function IngestedPage() {
           <span className="text-sm text-slate-500">{deduped.length}</span>
         </div>
       </div>
+
+      <QuarantinedSection />
 
       <div className="px-4 pb-3">
         <div className="relative">

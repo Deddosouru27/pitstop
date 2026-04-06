@@ -195,6 +195,8 @@ export interface IngestedContent {
   overall_immediate?: number | null
   overall_strategic?: number | null
   is_guide?: boolean | null
+  quarantined?: boolean | null
+  quarantine_reason?: string | null
   created_at: string
 }
 
