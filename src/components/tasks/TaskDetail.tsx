@@ -199,7 +199,7 @@ export default function TaskDetail({ taskId, onClose }: Props) {
             onChange={e => setTitle(e.target.value)}
             onBlur={() => save()}
             className="w-full bg-transparent text-slate-100 text-xl font-semibold outline-none pb-2 border-b border-white/10 focus:border-accent transition-colors"
-            placeholder="Task title"
+            placeholder="Название задачи"
           />
 
           {/* Description */}
@@ -308,7 +308,7 @@ export default function TaskDetail({ taskId, onClose }: Props) {
                 type="text"
                 value={newSubtask}
                 onChange={e => setNewSubtask(e.target.value)}
-                placeholder="Add subtask..."
+                placeholder="Добавить подзадачу..."
                 className="flex-1 bg-surface text-slate-100 placeholder-slate-600 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-accent"
               />
               <button

@@ -243,7 +243,7 @@ export default function QuickCapture({ projects }: QuickCaptureProps) {
             value={text}
             onChange={e => setText(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Quick idea... AI picks the project"
+            placeholder="Быстрая идея... AI выберет проект"
             className="flex-1 bg-transparent text-sm text-slate-100 placeholder:text-slate-500 outline-none"
             disabled={saving}
           />

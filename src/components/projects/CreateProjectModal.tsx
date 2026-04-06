@@ -48,7 +48,7 @@ export default function CreateProjectModal({ onClose, onCreate }: Props) {
           <input
             autoFocus
             type="text"
-            placeholder="Project name"
+            placeholder="Название проекта"
             value={name}
             onChange={e => setName(e.target.value)}
             className="w-full bg-surface text-slate-100 placeholder-slate-600 rounded-xl px-4 py-3 text-sm outline-none focus:ring-1 focus:ring-accent"
@@ -81,7 +81,7 @@ export default function CreateProjectModal({ onClose, onCreate }: Props) {
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs text-slate-500">Color</label>
+            <label className="text-xs text-slate-500">Цвет</label>
             <div className="flex gap-3 flex-wrap">
               {COLORS.map(c => (
                 <button
