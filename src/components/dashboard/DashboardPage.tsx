@@ -132,12 +132,34 @@ function AgentCountWidget() {
   return (
     <div className="bg-white/5 rounded-2xl px-4 py-3 border border-white/[0.06] flex items-center gap-3">
       <Users size={16} className="text-purple-400 shrink-0" strokeWidth={1.75} />
-      <p className="text-xs font-medium text-slate-300">
+      <p className="text-xs font-medium text-slate-300 flex-1">
         Агенты: <span className="text-slate-100 font-bold">{total}</span>
         <span className="text-slate-600 mx-1.5">|</span>
         Активных: <span className={active > 0 ? 'text-emerald-400 font-bold' : 'text-slate-500 font-bold'}>{active}</span>
       </p>
+      <QuarantineCount />
     </div>
+  )
+}
+
+function QuarantineCount() {
+  const [count, setCount] = useState<number>(0)
+
+  useEffect(() => {
+    let cancelled = false
+    supabase
+      .from('ingested_content')
+      .select('*', { count: 'exact', head: true })
+      .eq('quarantined', true)
+      .then(({ count: c }) => { if (!cancelled) setCount(c ?? 0) })
+    return () => { cancelled = true }
+  }, [])
+
+  if (count === 0) return null
+  return (
+    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-900/40 text-amber-400 shrink-0">
+      ⚠️ {count} карантин
+    </span>
   )
 }
 
