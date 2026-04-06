@@ -24,7 +24,17 @@ const WORK_TYPE_ORDER: Record<string, number> = {
 const ASSIGNEE_BADGE: Record<string, string> = {
   autorun: '🤖', pekar: '🍞', intaker: '🔧',
   nout: '🖥️', opus: '🧠', sonnet: '✨', artur: '👤',
+  пекарь: '🍞', интакер: '🔧',
 }
+
+const ASSIGNEE_OPTIONS: { value: string; label: string }[] = [
+  { value: '',        label: 'Все' },
+  { value: 'nout',    label: 'nout 🖥️' },
+  { value: 'пекарь',  label: 'пекарь 🍞' },
+  { value: 'интакер', label: 'интакер 🔧' },
+  { value: 'artur',   label: 'artur 👤' },
+  { value: 'autorun', label: 'autorun 🤖' },
+]
 
 // ── Sort helpers ──────────────────────────────────────────────────────────────
 
@@ -125,23 +135,27 @@ type FilterKey = 'active' | 'done' | 'all'
 
 export default function TasksTab() {
   const { tasks, tasksLoading, completeTask } = useApp()
-  const [filter, setFilter]         = useState<FilterKey>('active')
-  const [showCreate, setShowCreate] = useState(false)
-  const [editTask, setEditTask]     = useState<Task | null>(null)
-  const [toastMsg, setToastMsg]     = useState<string | null>(null)
+  const [filter, setFilter]           = useState<FilterKey>('active')
+  const [assigneeFilter, setAssigneeFilter] = useState('')
+  const [showCreate, setShowCreate]   = useState(false)
+  const [editTask, setEditTask]       = useState<Task | null>(null)
+  const [toastMsg, setToastMsg]       = useState<string | null>(null)
 
   const showToast = (msg: string) => {
     setToastMsg(msg)
     setTimeout(() => setToastMsg(null), 3000)
   }
 
-  // Partition by status
+  // Partition by status (with optional assignee filter)
   const grouped = useMemo(() => {
+    const filtered = assigneeFilter
+      ? tasks.filter(t => t.assignee === assigneeFilter)
+      : tasks
     const g: Record<TaskStatus, Task[]> = {
       backlog: [], todo: [], in_progress: [], review: [],
       blocked: [], done: [], cancelled: [],
     }
-    for (const t of tasks) {
+    for (const t of filtered) {
       const s = (t.status ?? (t.is_completed ? 'done' : 'todo')) as TaskStatus
       if (s in g) g[s].push(t)
     }
@@ -150,7 +164,7 @@ export default function TasksTab() {
     // Sort done by updated_at desc
     g.done = sortDone(g.done)
     return g
-  }, [tasks])
+  }, [tasks, assigneeFilter])
 
   const totalActive = ACTIVE_GROUPS.reduce((s, g) => s + grouped[g.key].length, 0)
   const totalDone   = grouped.done.length
@@ -166,7 +180,8 @@ export default function TasksTab() {
     return <div className="flex items-center justify-center h-48 text-slate-500 text-sm">Загрузка...</div>
   }
 
-  const allTasks = [...tasks].sort(
+  const filteredTasks = assigneeFilter ? tasks.filter(t => t.assignee === assigneeFilter) : tasks
+  const allTasks = [...filteredTasks].sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   )
 
@@ -198,6 +213,21 @@ export default function TasksTab() {
             }`}>{tab.count}</span>
           </button>
         ))}
+      </div>
+
+      {/* Assignee filter */}
+      <div className="px-4 pb-3">
+        <select
+          value={assigneeFilter}
+          onChange={e => setAssigneeFilter(e.target.value)}
+          className="w-full bg-white/5 border border-white/10 text-slate-300 text-sm rounded-xl px-3 py-2 appearance-none focus:outline-none focus:border-purple-500/50"
+        >
+          {ASSIGNEE_OPTIONS.map(opt => (
+            <option key={opt.value} value={opt.value} className="bg-[#0f0f1a]">
+              {opt.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Content */}
