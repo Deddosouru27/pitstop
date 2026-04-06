@@ -70,6 +70,19 @@ function isTaskSafe(task: TaskRow): boolean {
 // CONFIG
 // ============================================================
 
+// Model IDs for the Claude CLI --model flag.
+// Pitstop tasks require full TypeScript/React reasoning — use Sonnet by default.
+// Set claudeModel: 'claude-haiku-4-5-20251001' only for simple non-UI repos.
+const CLAUDE_MODELS = {
+  sonnet: 'claude-sonnet-4-6',
+  haiku:  'claude-haiku-4-5-20251001',
+  opus:   'claude-opus-4-6',
+} as const
+type ClaudeModel = typeof CLAUDE_MODELS[keyof typeof CLAUDE_MODELS]
+
+// Repos where Sonnet is required (TypeScript/React frontends, strict tsc)
+const SONNET_REPOS = new Set(['pitstop'])
+
 interface AutorunConfig {
   agentName: string;       // e.g. 'baker', 'nout', 'intaker'
   agentId: string;         // UUID from agents table
@@ -82,6 +95,7 @@ interface AutorunConfig {
   maxTaskDurationMs?: number; // default 1800000 (30 min)
   maxFailCount?: number;   // default 2
   reviewInterval?: number; // tasks done between CEO periodic reviews, default 3
+  claudeModel?: ClaudeModel; // override default model selection
 }
 
 interface TaskRow {
@@ -119,6 +133,7 @@ export class AutorunClient {
       maxTaskDurationMs: 30 * 60 * 1000,
       maxFailCount: 2,
       reviewInterval: 3,
+      claudeModel: SONNET_REPOS.has(config.repoName) ? CLAUDE_MODELS.sonnet : CLAUDE_MODELS.sonnet,
       ...config,
     };
 
@@ -304,16 +319,29 @@ export class AutorunClient {
       // Build prompt for Claude Code
       const prompt = this.buildPrompt(task);
 
+      // Model selection: pitstop/frontend repos use Sonnet (TypeScript strict + React)
+      const model = this.config.claudeModel ?? CLAUDE_MODELS.sonnet;
+      console.log(`[AUTORUN] 🤖 Model: ${model}`);
+
       // Run Claude Code
-      this.currentTaskProcess = spawn('claude', ['-p', prompt, '--allowedTools', 'Edit,Write,Bash'], {
+      this.currentTaskProcess = spawn('claude', ['-p', prompt, '--model', model, '--allowedTools', 'Edit,Write,Bash'], {
         cwd: this.config.repoPath,
         stdio: ['ignore', 'pipe', 'pipe'],
         env: { ...process.env },
       });
 
       let output = '';
-      this.currentTaskProcess.stdout?.on('data', (data: Buffer) => { output += data.toString(); });
-      this.currentTaskProcess.stderr?.on('data', (data: Buffer) => { output += data.toString(); });
+      this.currentTaskProcess.stdout?.on('data', (data: Buffer) => {
+        const chunk = data.toString();
+        output += chunk;
+        // Stream Claude output live to console (full logging, not truncated)
+        process.stdout.write(chunk);
+      });
+      this.currentTaskProcess.stderr?.on('data', (data: Buffer) => {
+        const chunk = data.toString();
+        output += chunk;
+        process.stderr.write(chunk);
+      });
 
       this.currentTaskProcess.on('close', (code: number | null) => {
         clearTimeout(timeout);
@@ -358,21 +386,41 @@ export class AutorunClient {
   }
 
   private buildPrompt(task: TaskRow): string {
-    return `You are working on the ${this.config.repoName} repository.
+    const isPitstop = this.config.repoName === 'pitstop';
+
+    // Pitstop tasks need React/TypeScript-specific rules (stricter than runner tasks)
+    // Runner/intake tasks: simpler Node.js context, no JSX, no Vite build required
+    const repoRules = isPitstop
+      ? `- Stack: React 18 + Vite + TypeScript strict + Tailwind CSS + Supabase JS client.
+- Styling: Tailwind utility classes only. No CSS modules.
+- Run \`npm run build\` to verify — tsc + vite build must both pass.
+- No \`any\` types, no \`@ts-ignore\`, no TODO stubs.
+- Mobile-first: touch targets ≥ 44px, safe area insets.`
+      : `- Stack: Node.js + TypeScript + Supabase JS client.
+- Run \`npx tsc --noEmit\` to verify types.
+- No \`any\` types, no stubs.`;
+
+    const prompt = `You are working on the ${this.config.repoName} repository.
 
 TASK: ${task.title}
+PHASE: ${task.phase_number ?? 'N/A'}
 
 DESCRIPTION:
 ${task.description}
 
-RULES:
-- Write complete, working code. No TODOs or stubs.
-- One commit = one feature. TypeScript strict.
-- Build + tsc --noEmit must pass before you finish.
-- Do NOT execute any DDL SQL (CREATE/ALTER/DROP). Report SQL bugs as comments.
-- Pre-push: no API keys in code (grep -r "sk-" src/), build passes, tsc passes.
+REPO-SPECIFIC RULES:
+${repoRules}
 
-When done, make sure all changes are saved.`;
+GENERAL RULES:
+- Write complete, working code. No TODOs or stubs.
+- One commit = one feature.
+- Do NOT execute any DDL SQL (CREATE/ALTER/DROP). Report SQL bugs as comments.
+- No API keys in code.
+
+When done, make sure all changes are saved and committed.`;
+
+    console.log(`[AUTORUN] 📋 Prompt (${isPitstop ? 'pitstop' : 'other'} context, ${prompt.length} chars)`);
+    return prompt;
   }
 
   // ----------------------------------------------------------
@@ -687,6 +735,10 @@ if (__isMain) {
   const agentId = process.env.AGENT_ID || '';
   const repoName = process.env.REPO_NAME || 'pitstop';
   const repoPath = process.env.REPO_PATH || process.cwd();
+  // CLAUDE_MODEL overrides auto-selection. Use 'claude-haiku-4-5-20251001' to force Haiku,
+  // 'claude-sonnet-4-6' for Sonnet (default for pitstop), 'claude-opus-4-6' for Opus.
+  const claudeModel = (process.env.CLAUDE_MODEL as ClaudeModel | undefined) ??
+    (SONNET_REPOS.has(repoName) ? CLAUDE_MODELS.sonnet : CLAUDE_MODELS.sonnet);
 
   if (!agentId) {
     console.error('ERROR: Set AGENT_ID environment variable');
@@ -707,6 +759,7 @@ if (__isMain) {
     agentId,
     repoName,
     repoPath,
+    claudeModel,
   });
 
   // Crash failsafe — notify CEO via Telegram on uncaught errors
