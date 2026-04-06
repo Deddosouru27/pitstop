@@ -144,11 +144,10 @@ function AgentCountWidget() {
 // ── Autorun status ────────────────────────────────────────────────────────────
 
 function AutorunStatus() {
-  const [lastLog, setLastLog] = useState<{
-    action: string | null
-    status: string | null
-    created_at: string
+  const [lastEvent, setLastEvent] = useState<{
+    event_type: string
     details: Record<string, unknown> | null
+    created_at: string
   } | null>(null)
   const [todoCount, setTodoCount] = useState<number>(0)
 
@@ -156,33 +155,34 @@ function AutorunStatus() {
     let cancelled = false
     Promise.all([
       supabase
-        .from('agent_action_log')
-        .select('action, status, created_at, details')
+        .from('agent_events')
+        .select('event_type, details, created_at')
         .order('created_at', { ascending: false })
         .limit(1),
       supabase
         .from('tasks')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'todo'),
-    ]).then(([logRes, todoRes]) => {
+    ]).then(([evRes, todoRes]) => {
       if (cancelled) return
-      setLastLog((logRes.data?.[0] as typeof lastLog) ?? null)
+      setLastEvent((evRes.data?.[0] as typeof lastEvent) ?? null)
       setTodoCount(todoRes.count ?? 0)
     })
     return () => { cancelled = true }
   }, [])
 
-  const isActive = lastLog
-    ? (Date.now() - new Date(lastLog.created_at).getTime()) < 30 * 60 * 1000
+  // Active only if last agent_event is within 5 minutes
+  const isActive = lastEvent
+    ? (Date.now() - new Date(lastEvent.created_at).getTime()) < 5 * 60 * 1000
     : false
 
   const lastTaskTitle =
-    (lastLog?.details as Record<string, unknown> | null)?.task_title as string | undefined ??
-    lastLog?.action ??
+    (lastEvent?.details as Record<string, unknown> | null)?.task_title as string | undefined ??
+    (lastEvent?.details as Record<string, unknown> | null)?.title as string | undefined ??
     null
 
-  const lastOk = lastLog?.status
-    ? !lastLog.status.toLowerCase().includes('fail') && !lastLog.status.toLowerCase().includes('error')
+  const isOkEvent = lastEvent
+    ? !lastEvent.event_type.includes('fail') && !lastEvent.event_type.includes('error') && !lastEvent.event_type.includes('blocked')
     : true
 
   return (
@@ -201,7 +201,7 @@ function AutorunStatus() {
       {lastTaskTitle && (
         <p className="text-xs text-slate-500 pl-4">
           Последняя: <span className="text-slate-300">{lastTaskTitle}</span>{' '}
-          {lastOk ? '✅' : '❌'}
+          {isOkEvent ? '✅' : '❌'}
         </p>
       )}
     </div>

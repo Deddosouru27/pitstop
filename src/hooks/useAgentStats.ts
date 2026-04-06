@@ -48,28 +48,35 @@ export function useAgentStats() {
       const recentJobs: AgentJob[] = recentRes.data ?? []
       const memoryCount: number | null = memoryRes.error ? null : (memoryRes.count ?? null)
 
-      // ── Success rate + Выполнено за 7 дней (из tasks) ────────────────────
+      // ── Success rate: done / (done + blocked) за 7 дней ─────────────────
       const since7 = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-      const [doneRes, failedRes] = await Promise.all([
+      const [doneRes, blockedRes] = await Promise.all([
         supabase
           .from('tasks')
           .select('*', { count: 'exact', head: true })
           .eq('status', 'done')
-          .gte('completed_at', since7),
+          .gte('updated_at', since7),
         supabase
           .from('tasks')
           .select('*', { count: 'exact', head: true })
-          .eq('status', 'failed')
-          .gte('completed_at', since7),
+          .eq('status', 'blocked')
+          .gte('updated_at', since7),
       ])
       const completed7 = doneRes.count ?? 0
-      const failed7    = failedRes.count ?? 0
+      const blocked7   = blockedRes.count ?? 0
       const successRate =
-        completed7 + failed7 > 0
-          ? Math.round((completed7 / (completed7 + failed7)) * 100)
+        completed7 + blocked7 > 0
+          ? Math.round((completed7 / (completed7 + blocked7)) * 100)
           : 100
 
-      // ── Группировка по дням за 14 дней ────────────────────────────────────
+      // ── График активности: задачи done по completed_at за 14 дней ────────
+      const doneTasks14Res = await supabase
+        .from('tasks')
+        .select('completed_at')
+        .eq('status', 'done')
+        .gte('completed_at', since14)
+        .not('completed_at', 'is', null)
+
       const dayMap = new Map<string, number>()
       for (let i = 13; i >= 0; i--) {
         const d = new Date()
@@ -77,8 +84,8 @@ export function useAgentStats() {
         const key = d.toISOString().slice(0, 10)
         dayMap.set(key, 0)
       }
-      for (const job of allJobs) {
-        const key = job.created_at.slice(0, 10)
+      for (const t of (doneTasks14Res.data ?? []) as { completed_at: string }[]) {
+        const key = t.completed_at.slice(0, 10)
         if (dayMap.has(key)) dayMap.set(key, (dayMap.get(key) ?? 0) + 1)
       }
       const jobsByDay: DayCount[] = Array.from(dayMap.entries()).map(([date, count]) => ({
