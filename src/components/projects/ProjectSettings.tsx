@@ -82,7 +82,7 @@ export default function ProjectSettings({ project, onSave, onClose }: Props) {
                 type="text"
                 value={githubRepo}
                 onChange={e => setGithubRepo(e.target.value)}
-                placeholder="owner/repo"
+                placeholder="Deddosouru27/pitstop"
                 className="w-full bg-white/5 border border-white/[0.06] text-slate-100 placeholder-slate-600 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-purple-500/50 transition-colors"
               />
               <p className="text-[11px] text-slate-600 px-1">
@@ -99,7 +99,7 @@ export default function ProjectSettings({ project, onSave, onClose }: Props) {
                 type="text"
                 value={deployUrl}
                 onChange={e => setDeployUrl(e.target.value)}
-                placeholder="https://your-app.vercel.app"
+                placeholder="pitstop-dusky.vercel.app"
                 className="w-full bg-white/5 border border-white/[0.06] text-slate-100 placeholder-slate-600 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-purple-500/50 transition-colors"
               />
             </div>
