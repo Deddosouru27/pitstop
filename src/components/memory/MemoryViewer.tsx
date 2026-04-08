@@ -17,9 +17,14 @@ const TYPE_CFG: Record<string, { icon: string; label: string; cls: string }> = {
   manual_note:            { icon: '📝', label: 'Note',          cls: 'bg-slate-800 text-slate-400' },
   // Current types
   job_outcome:            { icon: '⚙️', label: 'Job',           cls: 'bg-indigo-900/50 text-indigo-400' },
+  waa:                    { icon: '⚙️', label: 'WAA',           cls: 'bg-indigo-900/50 text-indigo-400' },
   session_log:            { icon: '🖥', label: 'Session',       cls: 'bg-violet-900/50 text-violet-400' },
-  decision_log:           { icon: '🧭', label: 'Решение',       cls: 'bg-blue-900/50 text-blue-400' },
-  system_rule:            { icon: '⚙️', label: 'Правило',       cls: 'bg-slate-700 text-slate-300' },
+  session_summary:        { icon: '🖥', label: 'Session',       cls: 'bg-violet-900/50 text-violet-400' },
+  handoff:                { icon: '🤝', label: 'Handoff',       cls: 'bg-violet-900/50 text-violet-400' },
+  decision_log:           { icon: '🎯', label: 'Решение',       cls: 'bg-blue-900/50 text-blue-400' },
+  decision:               { icon: '🎯', label: 'Решение',       cls: 'bg-blue-900/50 text-blue-400' },
+  system_rule:            { icon: '📜', label: 'Правило',       cls: 'bg-slate-700 text-slate-300' },
+  lesson:                 { icon: '📚', label: 'Урок',          cls: 'bg-amber-900/50 text-amber-400' },
   intake_processing_log:  { icon: '📥', label: 'Intake',        cls: 'bg-sky-900/50 text-sky-400' },
   calibration_data:       { icon: '📐', label: 'Calibration',   cls: 'bg-teal-900/50 text-teal-400' },
 }
@@ -59,6 +64,16 @@ function getTitle(s: BrowseSnapshot): string {
       return String(c.source_url ?? c.url ?? c.title ?? 'Intake').slice(0, 100)
     case 'calibration_data':
       return String(c.topic ?? c.title ?? 'Calibration').slice(0, 100)
+    case 'lesson':
+      return String(c.lesson ?? c.title ?? c.summary ?? 'Lesson').slice(0, 100)
+    case 'decision':
+      return String(c.decision ?? c.title ?? c.what ?? 'Decision').slice(0, 100)
+    case 'waa':
+      return String(c.task_title ?? c.action ?? c.summary ?? 'WAA').slice(0, 100)
+    case 'handoff':
+      return String(c.summary ?? c.message ?? c.from ?? 'Handoff').slice(0, 100)
+    case 'session_summary':
+      return String(c.summary ?? c.session_id ?? 'Session summary').slice(0, 100)
     default: {
       const first = c.title ?? c.text ?? c.content ?? c.summary ?? c.description ?? c.name ?? c.what_done
       return first ? String(first).slice(0, 80) : s.snapshot_type
@@ -191,11 +206,21 @@ function SnapshotCard({ snap, onOpen }: { snap: BrowseSnapshot; onOpen: (s: Brow
 
 // ── Tab definitions ────────────────────────────────────────────────────────────
 
-const TABS = [
-  { key: 'all',          label: 'Все'      },
-  { key: 'job_outcome',  label: '⚙️ Jobs'  },
-  { key: 'decision_log', label: '🧭 Решения' },
-  { key: 'system_rule',  label: '📋 Правила' },
+interface TabDef {
+  key: string
+  label: string
+  types?: string[]
+  typeLike?: string
+}
+
+const TABS: TabDef[] = [
+  { key: 'all',       label: 'Все' },
+  { key: 'rules',     label: '📜 Правила',    types: ['system_rule'] },
+  { key: 'decisions', label: '🎯 Решения',    types: ['decision_log', 'decision'] },
+  { key: 'lessons',   label: '📚 Уроки',      types: ['lesson'] },
+  { key: 'results',   label: '✅ Результаты', types: ['job_outcome', 'task_completed'] },
+  { key: 'sessions',  label: '🔄 Сессии',     types: ['session_log', 'handoff', 'session_summary'] },
+  { key: 'audits',    label: '🔍 Аудиты',     typeLike: '%audit%' },
 ]
 
 // ── Main page ──────────────────────────────────────────────────────────────────
@@ -207,8 +232,11 @@ export default function MemoryViewer() {
   const [selected, setSelected] = useState<BrowseSnapshot | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const activeTab = TABS.find(t => t.key === tab) ?? TABS[0]
+
   const { items, loading, loadingMore, hasMore, total, loadMore } = useSnapshotsBrowse({
-    type: tab,
+    types: activeTab.types,
+    typeLike: activeTab.typeLike,
     search,
   })
 
@@ -234,7 +262,7 @@ export default function MemoryViewer() {
             <span className="text-sm text-slate-500">{total} записей</span>
           )}
         </div>
-        <p className="text-xs text-slate-600 mt-0.5">context_snapshots · Pitstop DB</p>
+        <p className="text-xs text-slate-600 mt-0.5">context_snapshots · Память системы</p>
       </div>
 
       {/* Search */}

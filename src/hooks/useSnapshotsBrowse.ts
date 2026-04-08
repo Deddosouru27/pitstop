@@ -10,12 +10,21 @@ export interface BrowseSnapshot {
   created_at: string
 }
 
-export function useSnapshotsBrowse({ type, search }: { type: string; search: string }) {
+interface BrowseOpts {
+  types?: string[]
+  typeLike?: string
+  search: string
+}
+
+export function useSnapshotsBrowse({ types, typeLike, search }: BrowseOpts) {
   const [items, setItems]           = useState<BrowseSnapshot[]>([])
   const [loading, setLoading]       = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore]       = useState(false)
   const [total, setTotal]           = useState<number | null>(null)
+
+  // Stable key for deps
+  const typesKey = types?.join(',') ?? ''
 
   const fetchPage = useCallback(async (offset: number, append: boolean) => {
     let q = supabase
@@ -24,7 +33,14 @@ export function useSnapshotsBrowse({ type, search }: { type: string; search: str
       .order('created_at', { ascending: false })
       .range(offset, offset + PAGE_SIZE - 1)
 
-    if (type !== 'all') q = q.eq('snapshot_type', type)
+    if (types && types.length === 1) {
+      q = q.eq('snapshot_type', types[0])
+    } else if (types && types.length > 1) {
+      q = q.in('snapshot_type', types)
+    } else if (typeLike) {
+      q = q.ilike('snapshot_type', typeLike)
+    }
+
     if (search.trim()) q = q.filter('content::text', 'ilike', `%${search.trim()}%`)
 
     const { data, count, error } = await q
@@ -34,7 +50,7 @@ export function useSnapshotsBrowse({ type, search }: { type: string; search: str
     setHasMore(rows.length === PAGE_SIZE)
     setItems(prev => append ? [...prev, ...rows] : rows)
     if (offset === 0 && count != null) setTotal(count)
-  }, [type, search])
+  }, [typesKey, typeLike, search]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     setLoading(true)

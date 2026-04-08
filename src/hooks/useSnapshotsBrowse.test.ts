@@ -16,7 +16,7 @@ vi.mock('../lib/supabase', () => {
     const result = { data, error: null, count }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const q: any = {}
-    for (const m of ['order', 'eq', 'neq', 'not', 'is', 'limit', 'filter', 'gte', 'lte', 'maybeSingle']) {
+    for (const m of ['order', 'eq', 'neq', 'not', 'is', 'in', 'ilike', 'limit', 'filter', 'gte', 'lte', 'maybeSingle']) {
       q[m] = () => q
     }
     q.range = () => q
@@ -43,20 +43,20 @@ import { useSnapshotsBrowse } from './useSnapshotsBrowse'
 
 describe('useSnapshotsBrowse', () => {
   test('loads items on mount', async () => {
-    const { result } = renderHook(() => useSnapshotsBrowse({ type: 'all', search: '' }))
+    const { result } = renderHook(() => useSnapshotsBrowse({ search: '' }))
     expect(result.current.loading).toBe(true)
     await waitFor(() => expect(result.current.loading).toBe(false), { timeout: 3000 })
     expect(result.current.items).toHaveLength(5)
   })
 
   test('exposes total count', async () => {
-    const { result } = renderHook(() => useSnapshotsBrowse({ type: 'all', search: '' }))
+    const { result } = renderHook(() => useSnapshotsBrowse({ search: '' }))
     await waitFor(() => expect(result.current.loading).toBe(false), { timeout: 3000 })
     expect(result.current.total).toBe(5)
   })
 
   test('items have required BrowseSnapshot fields', async () => {
-    const { result } = renderHook(() => useSnapshotsBrowse({ type: 'all', search: '' }))
+    const { result } = renderHook(() => useSnapshotsBrowse({ search: '' }))
     await waitFor(() => expect(result.current.loading).toBe(false), { timeout: 3000 })
     for (const item of result.current.items) {
       expect(typeof item.id).toBe('string')
@@ -66,15 +66,15 @@ describe('useSnapshotsBrowse', () => {
     }
   })
 
-  test('resets items when type filter changes', async () => {
+  test('resets items when types filter changes', async () => {
     const { result, rerender } = renderHook(
-      ({ type }) => useSnapshotsBrowse({ type, search: '' }),
-      { initialProps: { type: 'all' } }
+      ({ types }) => useSnapshotsBrowse({ types, search: '' }),
+      { initialProps: { types: undefined as string[] | undefined } }
     )
     await waitFor(() => expect(result.current.loading).toBe(false), { timeout: 3000 })
     expect(result.current.items).toHaveLength(5)
 
-    rerender({ type: 'job_outcome' })
+    rerender({ types: ['job_outcome'] })
     // After rerender, loading should reset
     await waitFor(() => expect(result.current.loading).toBe(false), { timeout: 3000 })
     // Mock returns all 5 regardless — just verify it re-fetched (loading went true then false)
@@ -82,13 +82,13 @@ describe('useSnapshotsBrowse', () => {
   })
 
   test('exposes loadMore function', async () => {
-    const { result } = renderHook(() => useSnapshotsBrowse({ type: 'all', search: '' }))
+    const { result } = renderHook(() => useSnapshotsBrowse({ search: '' }))
     await waitFor(() => expect(result.current.loading).toBe(false), { timeout: 3000 })
     expect(typeof result.current.loadMore).toBe('function')
   })
 
   test('hasMore is false when results < PAGE_SIZE (40)', async () => {
-    const { result } = renderHook(() => useSnapshotsBrowse({ type: 'all', search: '' }))
+    const { result } = renderHook(() => useSnapshotsBrowse({ search: '' }))
     await waitFor(() => expect(result.current.loading).toBe(false), { timeout: 3000 })
     // 5 items < 40 PAGE_SIZE → hasMore should be false
     expect(result.current.hasMore).toBe(false)

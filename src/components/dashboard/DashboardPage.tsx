@@ -319,26 +319,46 @@ function execEventIcon(eventType: string): string {
   return '⚡'
 }
 
-function ExecutionHistory({ taskId }: { taskId: string }) {
+function ExecutionHistory({ taskId, title }: { taskId: string; title: string }) {
   const [events, setEvents] = useState<ExecEvent[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let cancelled = false
 
-    supabase
-      .from('agent_events')
-      .select('id, event_type, details, created_at')
-      .filter('details->>task_id', 'eq', taskId)
-      .order('created_at', { ascending: true })
-      .then(({ data }) => {
-        if (cancelled) return
-        setEvents((data ?? []) as ExecEvent[])
+    async function load() {
+      // Search by task_id first
+      const { data: byId } = await supabase
+        .from('agent_events')
+        .select('id, event_type, details, created_at')
+        .filter('details->>task_id', 'eq', taskId)
+        .order('created_at', { ascending: true })
+
+      if (cancelled) return
+
+      if (byId && byId.length > 0) {
+        setEvents(byId as ExecEvent[])
         setLoading(false)
-      })
+        return
+      }
+
+      // Fallback: search by task_title containing the title
+      const { data: byTitle } = await supabase
+        .from('agent_events')
+        .select('id, event_type, details, created_at')
+        .filter('details->>task_title', 'ilike', `%${title}%`)
+        .order('created_at', { ascending: true })
+        .limit(20)
+
+      if (cancelled) return
+      setEvents((byTitle ?? []) as ExecEvent[])
+      setLoading(false)
+    }
+
+    load()
 
     return () => { cancelled = true }
-  }, [taskId])
+  }, [taskId, title])
 
   if (loading) return <p className="text-xs text-slate-600 py-2">Загрузка истории...</p>
   if (events.length === 0) return null
@@ -426,7 +446,7 @@ function TaskDetailModal({ task, onClose }: { task: Task; onClose: () => void })
           )}
 
           {/* Execution History (T515) */}
-          <ExecutionHistory taskId={task.id} />
+          <ExecutionHistory taskId={task.id} title={task.title} />
         </div>
       </div>
     </div>
