@@ -478,7 +478,6 @@ function AutorunPanel() {
       .eq('status', 'todo')
       .order('phase_number', { ascending: true })
       .order('work_type', { ascending: true })
-      .limit(50)
 
     setQueue((data ?? []) as QueueTask[])
     setLoading(false)

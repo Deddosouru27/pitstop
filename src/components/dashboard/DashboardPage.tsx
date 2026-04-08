@@ -637,6 +637,115 @@ function ActivityFeed() {
   )
 }
 
+// ── Agent Workload widget ─────────────────────────────────────────────────────
+
+interface WorkloadRow {
+  assignee: string
+  todo: number
+  in_progress: number
+  done: number
+}
+
+const ASSIGNEE_DISPLAY: Record<string, string> = {
+  nout: 'Ноут',
+  пекарь: 'Пекарь',
+  интакер: 'Интакер',
+  artur: 'Артур',
+  autorun: 'Autorun',
+  pekar: 'Пекарь',
+  intaker: 'Интакер',
+}
+
+function AgentWorkloadWidget() {
+  const [rows, setRows]         = useState<WorkloadRow[]>([])
+  const [cycleName, setCycleName] = useState<string>('')
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function load() {
+      const { data: plan } = await supabase
+        .from('cycle_plans')
+        .select('id, name')
+        .eq('status', 'active')
+        .limit(1)
+        .maybeSingle()
+
+      if (cancelled || !plan) return
+      setCycleName(plan.name as string)
+
+      const { data } = await supabase
+        .from('tasks')
+        .select('assignee, status')
+        .eq('cycle_plan_id', plan.id as string)
+        .in('status', ['todo', 'in_progress', 'done'])
+        .not('assignee', 'is', null)
+
+      if (cancelled) return
+
+      const map: Record<string, { todo: number; in_progress: number; done: number }> = {}
+      for (const t of (data ?? []) as { assignee: string | null; status: string }[]) {
+        if (!t.assignee) continue
+        if (!map[t.assignee]) map[t.assignee] = { todo: 0, in_progress: 0, done: 0 }
+        const key = t.status as 'todo' | 'in_progress' | 'done'
+        if (key in map[t.assignee]) map[t.assignee][key]++
+      }
+
+      const result: WorkloadRow[] = Object.entries(map)
+        .map(([assignee, counts]) => ({ assignee, ...counts }))
+        .filter(r => r.todo + r.in_progress + r.done > 0)
+        .sort((a, b) => b.todo - a.todo)
+
+      setRows(result)
+    }
+
+    load()
+    const interval = setInterval(load, 60_000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [])
+
+  if (rows.length === 0) return null
+
+  return (
+    <div className="bg-white/[0.04] rounded-2xl border border-white/[0.06] px-4 py-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+          👥 Agent Workload
+        </p>
+        {cycleName && (
+          <span className="text-[10px] text-slate-600 truncate ml-2 max-w-[160px]">{cycleName}</span>
+        )}
+      </div>
+      <div className="space-y-2">
+        {rows.map(row => (
+          <div key={row.assignee} className="flex items-center gap-3">
+            <p className="text-xs text-slate-300 w-20 shrink-0">
+              {ASSIGNEE_DISPLAY[row.assignee] ?? row.assignee}
+            </p>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {row.todo > 0 && (
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/5 text-slate-400">
+                  {row.todo} todo
+                </span>
+              )}
+              {row.in_progress > 0 && (
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-900/30 text-blue-400">
+                  {row.in_progress} active
+                </span>
+              )}
+              {row.done > 0 && (
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-900/20 text-emerald-600">
+                  {row.done} done
+                </span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ── Cycle history widget ──────────────────────────────────────────────────────
 
 interface CycleSummary {
@@ -743,7 +852,8 @@ function CycleTwoWidget() {
     }
 
     load()
-    return () => { cancelled = true }
+    const interval = setInterval(load, 60_000)
+    return () => { cancelled = true; clearInterval(interval) }
   }, [])
 
   if (loading) return null
@@ -1337,6 +1447,9 @@ export default function DashboardPage() {
 
         {/* CEO Briefing */}
         <CeoBriefingWidget />
+
+        {/* Agent Workload */}
+        <AgentWorkloadWidget />
 
         {/* Stat cards */}
         <div className="grid grid-cols-2 gap-2">
