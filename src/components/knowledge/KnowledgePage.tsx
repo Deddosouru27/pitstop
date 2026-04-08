@@ -5,6 +5,7 @@ import { supabaseMemory } from '../../lib/supabaseMemory'
 import { useExtractedKnowledge } from '../../hooks/useExtractedKnowledge'
 import { useGuides } from '../../hooks/useGuides'
 import type { ExtractedKnowledge, MemoryHistory, IngestedContent } from '../../types'
+import SourceQualitySection from './SourceQualitySection'
 
 const ROUTED_COLORS: Record<string, string> = {
   hot:            'bg-red-900/50 text-red-400',
@@ -959,7 +960,7 @@ function PasteModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: ()
 }
 
 type SortKey = 'date' | 'date_asc' | 'immediate' | 'strategic' | 'source'
-type PageTab = 'knowledge' | 'guides'
+type PageTab = 'knowledge' | 'guides' | 'sources'
 type DatePreset = 'today' | '7d' | '30d' | 'all'
 
 function datePresetStart(preset: DatePreset): Date | null {
@@ -1272,6 +1273,7 @@ export default function KnowledgePage() {
           {([
             { key: 'knowledge', label: '🧠 База знаний' },
             { key: 'guides',    label: '📖 Гайды' },
+            { key: 'sources',   label: '🏆 Sources' },
           ] as const).map(tab => (
             <button
               key={tab.key}
@@ -1295,7 +1297,14 @@ export default function KnowledgePage() {
         </div>
       )}
 
-      {pageTab !== 'guides' && (
+      {/* Sources tab */}
+      {pageTab === 'sources' && (
+        <div className="px-4 flex-1 pb-8">
+          <SourceQualitySection />
+        </div>
+      )}
+
+      {pageTab === 'knowledge' && (
       <>
       {/* Stats bar */}
       <div className="px-4 pb-3">

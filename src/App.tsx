@@ -25,6 +25,8 @@ import DataQualityPage from './components/data-quality/DataQualityPage'
 import DiscoveryPage from './components/discovery/DiscoveryPage'
 import PendingPage from './components/pending/PendingPage'
 import AuditPage from './components/audit/AuditPage'
+import IdeasScoredPage from './components/ideas/IdeasScoredPage'
+import WeeklyReportPage from './components/reports/WeeklyReportPage'
 
 function AppShell() {
   const { selectedTaskId, closeTask } = useApp()
@@ -57,6 +59,8 @@ function AppShell() {
           <Route path="/discovery" element={<DiscoveryPage />} />
           <Route path="/pending" element={<PendingPage />} />
           <Route path="/audit" element={<AuditPage />} />
+          <Route path="/ideas-scored" element={<IdeasScoredPage />} />
+          <Route path="/weekly-report" element={<WeeklyReportPage />} />
           <Route path="*" element={<Navigate to="/projects" replace />} />
         </Routes>
       </main>
