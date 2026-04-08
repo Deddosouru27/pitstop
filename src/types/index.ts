@@ -138,6 +138,13 @@ export interface Idea {
   rejection_reason?: string | null
   reviewed_by?: string | null
   reviewed_at?: string | null
+  ai_analysis?: {
+    action?: string | null
+    urgency?: number | null
+    impact?: number | null
+    reason?: string | null
+    summary?: string | null
+  } | null
   created_at: string
 }
 
