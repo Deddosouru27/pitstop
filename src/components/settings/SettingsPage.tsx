@@ -1,4 +1,5 @@
 import { Settings, Sun, Moon, Globe, Bell, BellOff, ExternalLink, Database, Cpu, Link2 } from 'lucide-react'
+import { useTheme } from '../../context/ThemeContext'
 import { useSettings } from '../../hooks/useSettings'
 import type { Language } from '../../types'
 
@@ -31,7 +32,8 @@ const LANG_OPTIONS: { value: Language; label: Record<Language, string> }[] = [
 ]
 
 export default function SettingsPage() {
-  const { settings, setTheme, setLanguage, setNotifications } = useSettings()
+  const { theme, setTheme } = useTheme()
+  const { settings, setLanguage, setNotifications } = useSettings()
   const lang = settings.language
 
   return (
@@ -49,15 +51,15 @@ export default function SettingsPage() {
         <h2 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3 px-1">
           {t('appearance', lang)}
         </h2>
-        <div className="bg-surface rounded-2xl overflow-hidden divide-y divide-white/[0.06]">
+        <div className="bg-surface rounded-2xl overflow-hidden divide-y divide-[var(--color-border)]">
           {/* Theme toggle */}
           <div className="px-4 py-3.5">
-            <div className="text-sm font-medium text-slate-200 mb-3">{t('theme', lang)}</div>
+            <div className="text-sm font-medium text-[var(--color-text)] mb-3">{t('theme', lang)}</div>
             <div className="flex gap-2">
               <button
                 onClick={() => setTheme('dark')}
                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-colors ${
-                  settings.theme === 'dark' ? 'bg-accent text-white' : 'bg-surface-el text-slate-400 hover:text-slate-200'
+                  theme === 'dark' ? 'bg-accent text-white' : 'bg-surface-el text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
                 }`}
               >
                 <Moon size={16} />
@@ -66,7 +68,7 @@ export default function SettingsPage() {
               <button
                 onClick={() => setTheme('light')}
                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-colors ${
-                  settings.theme === 'light' ? 'bg-accent text-white' : 'bg-surface-el text-slate-400 hover:text-slate-200'
+                  theme === 'light' ? 'bg-accent text-white' : 'bg-surface-el text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
                 }`}
               >
                 <Sun size={16} />

@@ -1,54 +1,50 @@
-import { useState, useEffect, useCallback } from 'react'
-import type { UserSettings, Theme, Language } from '../types'
+import { useState, useCallback } from 'react'
+import { useTheme } from '../context/ThemeContext'
+import type { UserSettings, Language } from '../types'
 
 const STORAGE_KEY = 'maos-settings'
 
-const DEFAULT_SETTINGS: UserSettings = {
-  theme: 'dark',
+interface StoredSettings {
+  language: Language
+  notifications: boolean
+}
+
+const DEFAULT_STORED: StoredSettings = {
   language: 'ru',
   notifications: true,
 }
 
-function loadSettings(): UserSettings {
+function loadStored(): StoredSettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return DEFAULT_SETTINGS
-    const parsed = JSON.parse(raw) as Partial<UserSettings>
-    return { ...DEFAULT_SETTINGS, ...parsed }
+    if (!raw) return DEFAULT_STORED
+    const parsed = JSON.parse(raw) as Partial<StoredSettings>
+    return { ...DEFAULT_STORED, ...parsed }
   } catch {
-    return DEFAULT_SETTINGS
-  }
-}
-
-function applyTheme(theme: Theme): void {
-  const root = document.documentElement
-  if (theme === 'light') {
-    root.classList.add('light')
-    root.classList.remove('dark')
-  } else {
-    root.classList.add('dark')
-    root.classList.remove('light')
+    return DEFAULT_STORED
   }
 }
 
 export function useSettings() {
-  const [settings, setSettings] = useState<UserSettings>(loadSettings)
+  const { theme, setTheme } = useTheme()
+  const [stored, setStored] = useState<StoredSettings>(loadStored)
 
-  useEffect(() => {
-    applyTheme(settings.theme)
-  }, [settings.theme])
-
-  const updateSettings = useCallback((updates: Partial<UserSettings>) => {
-    setSettings(prev => {
+  const updateStored = useCallback((updates: Partial<StoredSettings>) => {
+    setStored(prev => {
       const next = { ...prev, ...updates }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
       return next
     })
   }, [])
 
-  const setTheme = useCallback((theme: Theme) => updateSettings({ theme }), [updateSettings])
-  const setLanguage = useCallback((language: Language) => updateSettings({ language }), [updateSettings])
-  const setNotifications = useCallback((notifications: boolean) => updateSettings({ notifications }), [updateSettings])
+  const setLanguage = useCallback((language: Language) => updateStored({ language }), [updateStored])
+  const setNotifications = useCallback((notifications: boolean) => updateStored({ notifications }), [updateStored])
 
-  return { settings, updateSettings, setTheme, setLanguage, setNotifications }
+  const settings: UserSettings = {
+    theme,
+    language: stored.language,
+    notifications: stored.notifications,
+  }
+
+  return { settings, setTheme, setLanguage, setNotifications }
 }

@@ -32,12 +32,12 @@ function MoreDrawer({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 z-50 flex flex-col justify-end" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
-        className="relative bg-[#13131a] rounded-t-3xl shadow-2xl border-t border-white/[0.06] animate-slide-up"
+        className="relative bg-[var(--color-surface)] rounded-t-3xl shadow-2xl border-t border-[var(--color-border)] animate-slide-up"
         onClick={e => e.stopPropagation()}
       >
         {/* Handle */}
         <div className="flex justify-center pt-3 pb-2">
-          <div className="w-10 h-1 bg-white/20 rounded-full" />
+          <div className="w-10 h-1 bg-[var(--color-text-muted)]/30 rounded-full" />
         </div>
         {/* Header */}
         <div className="flex items-center justify-between px-5 pb-3">
@@ -75,7 +75,7 @@ export default function BottomNav() {
 
   return (
     <>
-      <nav className="flex border-t border-white/[0.06] bg-surface/80 backdrop-blur-xl">
+      <nav className="flex border-t border-[var(--color-border)] bg-surface/80 backdrop-blur-xl">
         {PRIMARY.map(({ to, icon: Icon, label, badge }) => (
           <NavLink
             key={to}

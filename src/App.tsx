@@ -1,5 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AppProvider, useApp } from './context/AppContext'
+import { ThemeProvider, useTheme } from './context/ThemeContext'
+import { Sun, Moon } from 'lucide-react'
 import BottomNav from './components/BottomNav'
 import TaskDetail from './components/tasks/TaskDetail'
 import ProjectsTab from './components/projects/ProjectsTab'
@@ -28,11 +30,25 @@ import AuditPage from './components/audit/AuditPage'
 import IdeasScoredPage from './components/ideas/IdeasScoredPage'
 import WeeklyReportPage from './components/reports/WeeklyReportPage'
 
+function ThemeToggle() {
+  const { theme, toggleTheme } = useTheme()
+  return (
+    <button
+      onClick={toggleTheme}
+      className="fixed top-3 right-3 z-40 w-9 h-9 rounded-xl bg-[var(--color-surface-el)] border border-[var(--color-border)] flex items-center justify-center text-[var(--color-text-muted)] hover:text-[var(--color-text)] active:scale-95 transition-all shadow-lg"
+      aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+    >
+      {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+    </button>
+  )
+}
+
 function AppShell() {
   const { selectedTaskId, closeTask } = useApp()
 
   return (
     <div className="flex flex-col h-dvh bg-[var(--color-bg)] text-[var(--color-text)] overflow-hidden">
+      <ThemeToggle />
       <main className="flex-1 overflow-y-auto">
         <Routes>
           <Route path="/" element={<Navigate to="/projects" replace />} />
@@ -75,9 +91,11 @@ function AppShell() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AppProvider>
-        <AppShell />
-      </AppProvider>
+      <ThemeProvider>
+        <AppProvider>
+          <AppShell />
+        </AppProvider>
+      </ThemeProvider>
     </BrowserRouter>
   )
 }
