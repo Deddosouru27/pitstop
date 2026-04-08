@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { BarChart2, ChevronDown, X, Plus, Inbox, Lightbulb, TrendingUp, Users } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAgentStats } from '../../hooks/useAgentStats'
@@ -1500,6 +1500,369 @@ function CeoBriefingWidget() {
   )
 }
 
+// ── Strategic Progress ────────────────────────────────────────────────────────
+
+interface StrategicBlock {
+  code: string
+  title: string
+  block_status: string
+  done: number
+  todo: number
+  in_progress: number
+  backlog: number
+  blocked: number
+  total: number
+  pct_done: string
+}
+
+function progressColor(pct: number): { bar: string; text: string } {
+  if (pct >= 80) return { bar: 'bg-emerald-500', text: 'text-emerald-400' }
+  if (pct >= 50) return { bar: 'bg-purple-500', text: 'text-purple-400' }
+  if (pct >= 20) return { bar: 'bg-amber-500', text: 'text-amber-400' }
+  return { bar: 'bg-slate-600', text: 'text-slate-500' }
+}
+
+const BLOCK_STATUS_BADGE: Record<string, string> = {
+  active:    'bg-emerald-900/40 text-emerald-400',
+  planned:   'bg-slate-800 text-slate-500',
+  completed: 'bg-blue-900/40 text-blue-400',
+}
+
+function StrategicProgressWidget() {
+  const [blocks, setBlocks]   = useState<StrategicBlock[]>([])
+  const [loading, setLoading] = useState(true)
+  const [expanded, setExpanded] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    supabase
+      .from('strategic_progress')
+      .select('*')
+      .gt('total', 0)
+      .order('code')
+      .then(({ data }) => {
+        if (cancelled) return
+        setBlocks((data ?? []) as StrategicBlock[])
+        setLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  if (loading || blocks.length === 0) return null
+
+  const totalDone = blocks.reduce((s, b) => s + b.done, 0)
+  const totalAll  = blocks.reduce((s, b) => s + b.total, 0)
+  const overallPct = totalAll > 0 ? Math.round(totalDone / totalAll * 100) : 0
+
+  return (
+    <div className="bg-white/5 rounded-2xl border border-white/[0.06] px-4 py-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+          🏗 Strategic Progress
+        </p>
+        <span className="text-[11px] font-semibold text-slate-400">
+          {totalDone}/{totalAll} · {overallPct}%
+        </span>
+      </div>
+
+      {/* Overall bar */}
+      <div className="h-2 bg-white/[0.06] rounded-full overflow-hidden">
+        <div
+          className="h-full rounded-full bg-purple-500 transition-all"
+          style={{ width: `${overallPct}%` }}
+        />
+      </div>
+
+      {/* Block rows */}
+      <div className="space-y-1.5">
+        {blocks.map(block => {
+          const pct = parseFloat(block.pct_done) || 0
+          const colors = progressColor(pct)
+          const isOpen = expanded === block.code
+
+          return (
+            <div key={block.code}>
+              <button
+                onClick={() => setExpanded(prev => prev === block.code ? null : block.code)}
+                className="w-full flex items-center gap-2 py-1.5 text-left active:opacity-70 transition-opacity"
+              >
+                <span className={`text-[10px] font-bold w-14 shrink-0 ${colors.text}`}>
+                  {block.code.replace('BLOCK_', 'B')}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-slate-300 truncate">{block.title}</p>
+                  <div className="h-1 bg-white/[0.06] rounded-full overflow-hidden mt-1">
+                    <div
+                      className={`h-full rounded-full transition-all ${colors.bar}`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+                <span className={`text-[10px] font-semibold shrink-0 w-10 text-right ${colors.text}`}>
+                  {pct.toFixed(0)}%
+                </span>
+                <ChevronDown
+                  size={12}
+                  className={`text-slate-600 transition-transform shrink-0 ${isOpen ? 'rotate-180' : ''}`}
+                />
+              </button>
+
+              {isOpen && (
+                <div className="ml-14 mb-1.5 flex items-center gap-2 flex-wrap">
+                  <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${BLOCK_STATUS_BADGE[block.block_status] ?? 'bg-slate-800 text-slate-500'}`}>
+                    {block.block_status}
+                  </span>
+                  {block.done > 0 && (
+                    <span className="text-[10px] text-emerald-500">{block.done} done</span>
+                  )}
+                  {block.in_progress > 0 && (
+                    <span className="text-[10px] text-blue-400">{block.in_progress} wip</span>
+                  )}
+                  {block.todo > 0 && (
+                    <span className="text-[10px] text-slate-400">{block.todo} todo</span>
+                  )}
+                  {block.backlog > 0 && (
+                    <span className="text-[10px] text-slate-600">{block.backlog} backlog</span>
+                  )}
+                  {block.blocked > 0 && (
+                    <span className="text-[10px] text-red-400">{block.blocked} blocked</span>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ── Daily Metrics Chart ──────────────────────────────────────────────────────
+
+interface DailyMetricRow {
+  day: string
+  tasks_completed: number
+  tasks_failed: number
+  tasks_started: number
+  llm_calls: number
+  estimated_cost: string | null
+  active_agents: number
+}
+
+interface DailyChartPoint {
+  label: string
+  completed: number
+  failed: number
+  success_rate: number
+}
+
+function DailyMetricsTooltip({
+  active, payload, label,
+}: { active?: boolean; payload?: { dataKey: string; value: number; color: string }[]; label?: string }) {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="bg-[#1c1c27] border border-white/10 rounded-xl px-3 py-2 text-xs space-y-0.5">
+      <p className="font-medium text-slate-200">{label}</p>
+      {payload.map(p => (
+        <p key={p.dataKey} style={{ color: p.color }}>
+          {p.dataKey === 'success_rate' ? `${p.value}%` : p.value} {p.dataKey.replace(/_/g, ' ')}
+        </p>
+      ))}
+    </div>
+  )
+}
+
+function DailyMetricsChart() {
+  const [data, setData]       = useState<DailyChartPoint[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    supabase
+      .from('daily_metrics')
+      .select('*')
+      .order('day', { ascending: true })
+      .limit(14)
+      .then(({ data: rows }) => {
+        if (cancelled) return
+        const metrics = (rows ?? []) as DailyMetricRow[]
+        const points: DailyChartPoint[] = metrics.map(r => {
+          const total = r.tasks_completed + r.tasks_failed
+          return {
+            label: new Date(r.day).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }),
+            completed: r.tasks_completed,
+            failed: r.tasks_failed,
+            success_rate: total > 0 ? Math.round(r.tasks_completed / total * 100) : 0,
+          }
+        })
+        setData(points)
+        setLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  if (loading || data.length === 0) return null
+
+  return (
+    <div className="bg-white/5 rounded-2xl px-4 pt-4 pb-2 border border-white/[0.06] space-y-2">
+      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+        📈 Daily Metrics · 14 дней
+      </p>
+
+      {/* Legend */}
+      <div className="flex items-center gap-4 px-1">
+        <span className="flex items-center gap-1 text-[10px] text-emerald-400">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" /> completed
+        </span>
+        <span className="flex items-center gap-1 text-[10px] text-red-400">
+          <span className="w-2 h-2 rounded-full bg-red-400 inline-block" /> failed
+        </span>
+        <span className="flex items-center gap-1 text-[10px] text-blue-400">
+          <span className="w-2 h-0.5 bg-blue-400 inline-block border-t border-dashed border-blue-400" /> success %
+        </span>
+      </div>
+
+      <ResponsiveContainer width="100%" height={160}>
+        <LineChart data={data}>
+          <XAxis
+            dataKey="label"
+            tick={{ fill: '#64748b', fontSize: 10 }}
+            axisLine={false}
+            tickLine={false}
+          />
+          <YAxis
+            yAxisId="count"
+            hide
+            allowDecimals={false}
+          />
+          <YAxis
+            yAxisId="pct"
+            hide
+            domain={[0, 100]}
+            orientation="right"
+          />
+          <Tooltip content={<DailyMetricsTooltip />} cursor={false} />
+          <Line
+            yAxisId="count"
+            type="monotone"
+            dataKey="completed"
+            stroke="#34d399"
+            strokeWidth={2}
+            dot={{ r: 3, fill: '#34d399' }}
+          />
+          <Line
+            yAxisId="count"
+            type="monotone"
+            dataKey="failed"
+            stroke="#f87171"
+            strokeWidth={2}
+            dot={{ r: 3, fill: '#f87171' }}
+          />
+          <Line
+            yAxisId="pct"
+            type="monotone"
+            dataKey="success_rate"
+            stroke="#60a5fa"
+            strokeWidth={1.5}
+            strokeDasharray="5 3"
+            dot={false}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+// ── Cycle Velocity RPC Widget ────────────────────────────────────────────────
+
+interface CycleVelocityData {
+  cycle_name: string
+  done: number
+  todo: number
+  total: number
+  start_date: string
+  days_elapsed: number
+  velocity_per_day: number
+  projected_completion: string
+  projected_days_remaining: number
+}
+
+function CycleVelocityRpcWidget() {
+  const [data, setData]       = useState<CycleVelocityData | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    supabase
+      .rpc('cycle_velocity')
+      .then(({ data: result }) => {
+        if (cancelled) return
+        // RPC returns either a single object or wrapped in cycle_velocity key
+        const raw = result as CycleVelocityData | { cycle_velocity: CycleVelocityData } | null
+        if (!raw) { setLoading(false); return }
+        const parsed = 'cycle_velocity' in (raw as Record<string, unknown>)
+          ? (raw as { cycle_velocity: CycleVelocityData }).cycle_velocity
+          : raw as CycleVelocityData
+        setData(parsed)
+        setLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  if (loading || !data) return null
+
+  const pct = data.total > 0 ? Math.round(data.done / data.total * 100) : 0
+  const projDate = new Date(data.projected_completion).toLocaleDateString('ru-RU', {
+    day: 'numeric', month: 'short',
+  })
+
+  return (
+    <div className="bg-white/5 rounded-2xl border border-white/[0.06] px-4 py-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+          🚀 Cycle Velocity
+        </p>
+        <span className="text-[11px] text-slate-500 truncate ml-2 max-w-[180px]">{data.cycle_name}</span>
+      </div>
+
+      {/* Progress bar */}
+      <div className="space-y-1">
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-slate-400">{data.done}/{data.total} задач</span>
+          <span className="text-xs font-semibold text-purple-400">{pct}%</span>
+        </div>
+        <div className="h-2.5 bg-white/[0.06] rounded-full overflow-hidden">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-purple-600 to-purple-400 transition-all"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Stats grid */}
+      <div className="grid grid-cols-3 gap-2 pt-1 border-t border-white/[0.04]">
+        <div className="text-center">
+          <p className="text-lg font-bold text-purple-400">{data.velocity_per_day.toFixed(1)}</p>
+          <p className="text-[10px] text-slate-600 mt-0.5">задач/день</p>
+        </div>
+        <div className="text-center">
+          <p className="text-lg font-bold text-slate-200">{data.days_elapsed}</p>
+          <p className="text-[10px] text-slate-600 mt-0.5">дней прошло</p>
+        </div>
+        <div className="text-center">
+          <p className="text-lg font-bold text-emerald-400">{data.projected_days_remaining}</p>
+          <p className="text-[10px] text-slate-600 mt-0.5">дней осталось</p>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between pt-1 border-t border-white/[0.04]">
+        <span className="text-[11px] text-slate-600">📅 Прогноз завершения</span>
+        <span className="text-[11px] font-semibold text-emerald-400">{projDate}</span>
+      </div>
+    </div>
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 // ── Quick Actions ─────────────────────────────────────────────────────────────
@@ -1631,13 +1994,22 @@ export default function DashboardPage() {
           </ResponsiveContainer>
         </div>
 
+        {/* Daily Metrics chart */}
+        <DailyMetricsChart />
+
+        {/* Cycle Velocity RPC */}
+        <CycleVelocityRpcWidget />
+
+        {/* Strategic Progress */}
+        <StrategicProgressWidget />
+
         {/* Cycle widget */}
         <CycleWidget />
 
         {/* Cycle 2 progress */}
         <CycleTwoWidget />
 
-        {/* Cycle velocity */}
+        {/* Cycle velocity (bar comparison) */}
         <CycleVelocity />
 
         {/* Activity feed */}
