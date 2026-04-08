@@ -443,12 +443,114 @@ function TaskDetailSheet({ task, onClose }: { task: QueueTask; onClose: () => vo
   )
 }
 
+function AutorunStatusSection() {
+  const [sessionStatus, setSessionStatus] = useState<string | null>(null)
+  const [currentTask, setCurrentTask]     = useState<string | null>(null)
+  const [sending, setSending]             = useState<string | null>(null)
+  const [lastAction, setLastAction]       = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function load() {
+      const [sessionRes, taskRes] = await Promise.all([
+        supabase
+          .from('agent_sessions')
+          .select('status')
+          .order('created_at', { ascending: false })
+          .limit(1),
+        supabase
+          .from('tasks')
+          .select('title')
+          .eq('status', 'in_progress')
+          .limit(1),
+      ])
+      if (cancelled) return
+      const sess = (sessionRes.data?.[0] as { status: string } | undefined)
+      setSessionStatus(sess?.status ?? null)
+      const task = (taskRes.data?.[0] as { title: string } | undefined)
+      setCurrentTask(task?.title ?? null)
+    }
+
+    load()
+    const interval = setInterval(load, 15_000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [])
+
+  const sendCommand = async (command: 'start' | 'pause' | 'stop') => {
+    setSending(command)
+    const { error } = await supabase
+      .from('autorun_commands')
+      .insert({ command, agent_name: 'all' })
+    setSending(null)
+    if (!error) {
+      setLastAction(`Команда ${command.toUpperCase()} отправлена`)
+      setTimeout(() => setLastAction(null), 4000)
+    }
+  }
+
+  const isActive = sessionStatus === 'active'
+
+  return (
+    <div className="bg-white/5 rounded-2xl border border-white/[0.06] p-4 space-y-3">
+      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">🎛 Autorun Control</p>
+
+      {/* Status display */}
+      <div className="flex items-center gap-2">
+        <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${isActive ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
+        <p className="text-sm text-slate-300 font-medium">
+          Статус: <span className={isActive ? 'text-emerald-400' : 'text-slate-500'}>{sessionStatus ?? 'нет сессии'}</span>
+        </p>
+      </div>
+
+      {currentTask && (
+        <div className="bg-white/[0.04] rounded-xl px-3 py-2 border border-white/[0.06]">
+          <p className="text-[9px] text-slate-600 uppercase tracking-wider font-medium">⚡ Текущая задача</p>
+          <p className="text-xs text-slate-300 mt-0.5 line-clamp-2">{currentTask}</p>
+        </div>
+      )}
+
+      {/* 3 control buttons */}
+      <div className="grid grid-cols-3 gap-2">
+        <button
+          onClick={() => sendCommand('start')}
+          disabled={sending !== null}
+          className="flex items-center justify-center gap-1.5 py-3 rounded-xl font-medium text-sm border bg-emerald-900/20 text-emerald-400 border-emerald-700/30 hover:bg-emerald-900/30 disabled:opacity-50 transition-colors"
+        >
+          <Play size={14} />
+          {sending === 'start' ? '...' : 'Start'}
+        </button>
+        <button
+          onClick={() => sendCommand('pause')}
+          disabled={sending !== null}
+          className="flex items-center justify-center gap-1.5 py-3 rounded-xl font-medium text-sm border bg-amber-900/20 text-amber-400 border-amber-700/30 hover:bg-amber-900/30 disabled:opacity-50 transition-colors"
+        >
+          <Pause size={14} />
+          {sending === 'pause' ? '...' : 'Pause'}
+        </button>
+        <button
+          onClick={() => sendCommand('stop')}
+          disabled={sending !== null}
+          className="flex items-center justify-center gap-1.5 py-3 rounded-xl font-medium text-sm border bg-red-900/20 text-red-400 border-red-700/30 hover:bg-red-900/30 disabled:opacity-50 transition-colors"
+        >
+          <Square size={14} />
+          {sending === 'stop' ? '...' : 'Stop'}
+        </button>
+      </div>
+      {lastAction && (
+        <p className="text-xs text-emerald-400 text-center">✅ {lastAction}</p>
+      )}
+      <p className="text-[10px] text-slate-600 text-center">
+        Команды отправляются через autorun_commands. Бот проверяет очередь при следующем цикле.
+      </p>
+    </div>
+  )
+}
+
 function AutorunPanel() {
   const [queue, setQueue]       = useState<QueueTask[]>([])
   const [cycleName, setCycleName] = useState<string>('')
   const [loading, setLoading]   = useState(true)
-  const [sending, setSending]   = useState<string | null>(null)
-  const [lastAction, setLastAction] = useState<string | null>(null)
   const [selected, setSelected] = useState<QueueTask | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -491,18 +593,6 @@ function AutorunPanel() {
     }
   }, [fetchQueue])
 
-  const sendCommand = async (type: 'autorun_stop' | 'autorun_pause') => {
-    setSending(type === 'autorun_stop' ? 'stop' : 'pause')
-    const { error } = await supabase
-      .from('agent_jobs')
-      .insert({ type, payload: {}, status: 'pending' })
-    setSending(null)
-    if (!error) {
-      setLastAction(type === 'autorun_stop' ? 'Команда Stop отправлена' : 'Команда Pause отправлена')
-      setTimeout(() => setLastAction(null), 4000)
-    }
-  }
-
   // Group by phase_number
   const grouped = queue.reduce<Record<string, QueueTask[]>>((acc, t) => {
     const key = t.phase_number != null ? `Phase ${t.phase_number}` : 'Без фазы'
@@ -519,34 +609,8 @@ function AutorunPanel() {
 
   return (
     <div className="px-4 space-y-4 pb-8">
-      {/* Control buttons */}
-      <div className="bg-white/5 rounded-2xl border border-white/[0.06] p-4 space-y-3">
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">🎛 Управление Autorun</p>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={() => sendCommand('autorun_stop')}
-            disabled={sending !== null}
-            className="flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-sm border bg-red-900/20 text-red-400 border-red-700/30 hover:bg-red-900/30 disabled:opacity-50 transition-colors"
-          >
-            <Square size={14} />
-            {sending === 'stop' ? 'Отправка...' : 'Stop'}
-          </button>
-          <button
-            onClick={() => sendCommand('autorun_pause')}
-            disabled={sending !== null}
-            className="flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-sm border bg-amber-900/20 text-amber-400 border-amber-700/30 hover:bg-amber-900/30 disabled:opacity-50 transition-colors"
-          >
-            <Pause size={14} />
-            {sending === 'pause' ? 'Отправка...' : 'Pause'}
-          </button>
-        </div>
-        {lastAction && (
-          <p className="text-xs text-emerald-400 text-center">✅ {lastAction}</p>
-        )}
-        <p className="text-[10px] text-slate-600 text-center">
-          Команды отправляются через agent_jobs. Бот проверяет очередь при следующем цикле.
-        </p>
-      </div>
+      {/* Autorun control panel (T514) */}
+      <AutorunStatusSection />
 
       {/* Task queue */}
       <div className="space-y-3">

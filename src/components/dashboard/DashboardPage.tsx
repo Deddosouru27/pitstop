@@ -290,6 +290,99 @@ function GoalChainBreadcrumb({ chain }: { chain: GoalChain }) {
   )
 }
 
+// ── Execution History (T515) ─────────────────────────────────────────────────
+
+interface ExecEvent {
+  id: string
+  event_type: string
+  details: Record<string, unknown> | null
+  created_at: string
+}
+
+const EXEC_EVENT_ICON: Record<string, string> = {
+  task_started:   '🔵',
+  task_received:  '🔵',
+  task_completed: '✅',
+  task_failed:    '❌',
+  review_passed:  '✅',
+  review_failed:  '❌',
+  ceo_plan:       '🧠',
+  planning:       '🧠',
+  heartbeat:      '💓',
+}
+
+function execEventIcon(eventType: string): string {
+  if (EXEC_EVENT_ICON[eventType]) return EXEC_EVENT_ICON[eventType]
+  if (eventType.includes('fail') || eventType.includes('error')) return '❌'
+  if (eventType.includes('complet') || eventType.includes('pass')) return '✅'
+  if (eventType.includes('start') || eventType.includes('receiv')) return '🔵'
+  return '⚡'
+}
+
+function ExecutionHistory({ taskId }: { taskId: string }) {
+  const [events, setEvents] = useState<ExecEvent[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+
+    supabase
+      .from('agent_events')
+      .select('id, event_type, details, created_at')
+      .filter('details->>task_id', 'eq', taskId)
+      .order('created_at', { ascending: true })
+      .then(({ data }) => {
+        if (cancelled) return
+        setEvents((data ?? []) as ExecEvent[])
+        setLoading(false)
+      })
+
+    return () => { cancelled = true }
+  }, [taskId])
+
+  if (loading) return <p className="text-xs text-slate-600 py-2">Загрузка истории...</p>
+  if (events.length === 0) return null
+
+  return (
+    <div className="space-y-1.5">
+      <p className="text-[10px] text-slate-600 uppercase tracking-wider font-medium">📜 Execution History</p>
+      <div className="relative pl-4 border-l border-white/[0.08] space-y-2">
+        {events.map(ev => {
+          const d = ev.details
+          const commit = d?.commit as string | undefined
+          return (
+            <div key={ev.id} className="relative">
+              {/* Timeline dot */}
+              <span className="absolute -left-[21px] top-0.5 text-xs">{execEventIcon(ev.event_type)}</span>
+              <div className="flex items-start gap-2">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-slate-300 font-medium">
+                    {ev.event_type.replace(/_/g, ' ')}
+                  </p>
+                  {d?.task_title != null && (
+                    <p className="text-[11px] text-slate-500 truncate">{String(d.task_title)}</p>
+                  )}
+                  {d?.duration_seconds != null && (
+                    <p className="text-[10px] text-slate-600">{formatDuration(Number(d.duration_seconds))}</p>
+                  )}
+                  {commit && (
+                    <p className="text-[10px] text-purple-400 font-mono mt-0.5">
+                      commit: {String(commit).slice(0, 7)}
+                    </p>
+                  )}
+                </div>
+                <span className="text-[10px] text-slate-600 shrink-0 font-mono">
+                  {timeAgo(ev.created_at)}
+                </span>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function TaskDetailModal({ task, onClose }: { task: Task; onClose: () => void }) {
   const cfg = TASK_STATUS_CFG[task.status ?? 'backlog'] ?? TASK_STATUS_CFG.backlog
   return (
@@ -331,6 +424,9 @@ function TaskDetailModal({ task, onClose }: { task: Task; onClose: () => void })
           ) : (
             <p className="text-slate-600 text-sm italic">Описание не указано</p>
           )}
+
+          {/* Execution History (T515) */}
+          <ExecutionHistory taskId={task.id} />
         </div>
       </div>
     </div>
@@ -1136,9 +1232,9 @@ function TodayWidget() {
   )
 }
 
-// ── Agent Status widget ───────────────────────────────────────────────────────
+// ── Agent Activity Feed (T513) ───────────────────────────────────────────────
 
-interface AgentEventRow {
+interface AgentActivityRow {
   id: string
   agent_id: string | null
   event_type: string
@@ -1147,9 +1243,40 @@ interface AgentEventRow {
   agentName: string
 }
 
-function AgentStatusWidget() {
-  const [rows, setRows]     = useState<AgentEventRow[]>([])
-  const [loading, setLoading] = useState(true)
+const ACTIVITY_EMOJI: Record<string, string> = {
+  task_started:   '🔵',
+  task_received:  '🔵',
+  task_completed: '✅',
+  task_failed:    '❌',
+  review_passed:  '✅',
+  review_failed:  '❌',
+  ceo_plan:       '🧠',
+  planning:       '🧠',
+  heartbeat:      '💓',
+}
+
+function activityEmoji(eventType: string): string {
+  if (ACTIVITY_EMOJI[eventType]) return ACTIVITY_EMOJI[eventType]
+  if (eventType.includes('fail') || eventType.includes('error') || eventType.includes('blocked')) return '❌'
+  if (eventType.includes('complet') || eventType.includes('pass')) return '✅'
+  if (eventType.includes('start') || eventType.includes('receiv')) return '🔵'
+  if (eventType.includes('plan')) return '🧠'
+  return '⚡'
+}
+
+function activityTitle(ev: AgentActivityRow): string {
+  const d = ev.details
+  if (d) {
+    const title = (d.task_title ?? d.title ?? d.summary ?? d.message) as string | undefined
+    if (title) return title
+  }
+  return ev.event_type.replace(/_/g, ' ')
+}
+
+function AgentActivityFeed() {
+  const [rows, setRows]               = useState<AgentActivityRow[]>([])
+  const [loading, setLoading]         = useState(true)
+  const [hideHeartbeat, setHideHeartbeat] = useState(true)
 
   useEffect(() => {
     let cancelled = false
@@ -1160,7 +1287,7 @@ function AgentStatusWidget() {
           .from('agent_events')
           .select('id, agent_id, event_type, details, created_at')
           .order('created_at', { ascending: false })
-          .limit(5),
+          .limit(20),
         supabase
           .from('agents')
           .select('id, name'),
@@ -1172,7 +1299,7 @@ function AgentStatusWidget() {
         nameMap[a.id] = a.name
       }
 
-      const enriched: AgentEventRow[] = ((eventsRes.data ?? []) as {
+      const enriched: AgentActivityRow[] = ((eventsRes.data ?? []) as {
         id: string; agent_id: string | null; event_type: string
         details: Record<string, unknown> | null; created_at: string
       }[]).map(ev => ({
@@ -1185,54 +1312,50 @@ function AgentStatusWidget() {
     }
 
     load()
-    const interval = setInterval(load, 30_000)
+    const interval = setInterval(load, 15_000)
     return () => { cancelled = true; clearInterval(interval) }
   }, [])
 
   if (loading) return null
   if (rows.length === 0) return null
 
+  const visible = hideHeartbeat ? rows.filter(r => r.event_type !== 'heartbeat') : rows
+
   return (
-    <div className="bg-white/5 rounded-2xl border border-white/[0.06] overflow-hidden">
-      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 pt-4 pb-2">
-        🤖 Agent Status
-      </p>
-      <table className="w-full text-xs">
-        <thead>
-          <tr className="border-b border-white/[0.06]">
-            <th className="text-left px-4 py-2 text-[10px] text-slate-600 font-medium uppercase tracking-wider">Время</th>
-            <th className="text-left px-4 py-2 text-[10px] text-slate-600 font-medium uppercase tracking-wider">Агент</th>
-            <th className="text-left px-4 py-2 text-[10px] text-slate-600 font-medium uppercase tracking-wider">Действие</th>
-            <th className="text-left px-4 py-2 text-[10px] text-slate-600 font-medium uppercase tracking-wider">Статус</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-white/[0.04]">
-          {rows.map(ev => {
-            const isOk = ev.event_type.includes('completed') || ev.event_type.includes('passed')
-            const isErr = ev.event_type.includes('failed') || ev.event_type.includes('error') || ev.event_type.includes('blocked')
-            return (
-              <tr key={ev.id} className="hover:bg-white/[0.02]">
-                <td className="px-4 py-2 text-slate-600 font-mono whitespace-nowrap">
-                  {new Date(ev.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
-                </td>
-                <td className="px-4 py-2 text-slate-300 truncate max-w-[80px]">{ev.agentName}</td>
-                <td className="px-4 py-2 text-slate-400 truncate max-w-[120px]">
-                  {ev.event_type.replace(/_/g, ' ')}
-                </td>
-                <td className="px-4 py-2">
-                  <span className={`text-[10px] font-semibold ${
-                    isOk  ? 'text-emerald-400' :
-                    isErr ? 'text-red-400' :
-                    'text-slate-500'
-                  }`}>
-                    {isOk ? '✓' : isErr ? '✗' : '·'}
-                  </span>
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
+    <div className="bg-white/5 rounded-2xl border border-white/[0.06] px-4 py-4 space-y-1">
+      <div className="flex items-center justify-between pb-1">
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+          🤖 Agent Activity
+        </p>
+        <button
+          onClick={() => setHideHeartbeat(v => !v)}
+          className={`text-[10px] px-2 py-0.5 rounded-full transition-colors ${
+            hideHeartbeat
+              ? 'bg-white/5 text-slate-600 hover:text-slate-400'
+              : 'bg-purple-900/30 text-purple-400'
+          }`}
+        >
+          💓 {hideHeartbeat ? 'показать' : 'скрыть'}
+        </button>
+      </div>
+      {visible.map(ev => (
+        <div key={ev.id} className="flex items-start gap-2.5 py-1.5 border-t border-white/[0.04] first:border-0">
+          <span className="text-sm shrink-0 mt-0.5">{activityEmoji(ev.event_type)}</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-slate-300 leading-snug truncate">
+              <span className="text-slate-500 font-medium">{ev.agentName}</span>
+              {' · '}
+              {activityTitle(ev)}
+            </p>
+            <p className="text-[10px] text-slate-600 mt-0.5">
+              {ev.event_type.replace(/_/g, ' ')}
+            </p>
+          </div>
+          <span className="text-[10px] text-slate-600 shrink-0 font-mono">
+            {timeAgo(ev.created_at)}
+          </span>
+        </div>
+      ))}
     </div>
   )
 }
@@ -1442,8 +1565,8 @@ export default function DashboardPage() {
         {/* Today's activity */}
         <TodayWidget />
 
-        {/* Agent Status */}
-        <AgentStatusWidget />
+        {/* Agent Activity Feed */}
+        <AgentActivityFeed />
 
         {/* CEO Briefing */}
         <CeoBriefingWidget />
