@@ -1769,7 +1769,7 @@ export default function DashboardPage() {
   return (
     <div className="flex flex-col min-h-full pb-8">
       {/* Header */}
-      <div className="px-4 pt-6 pb-4">
+      <div className="px-4 pt-6 pb-4 max-w-[1280px] mx-auto w-full">
         <div className="flex items-center gap-2">
           <BarChart2 size={20} className="text-purple-400" strokeWidth={1.75} />
           <h1 className="text-2xl font-bold text-slate-100">Dashboard</h1>
@@ -1777,24 +1777,24 @@ export default function DashboardPage() {
         <p className="text-sm text-slate-500 mt-0.5">Активность агента</p>
       </div>
 
-      <div className="px-4 space-y-6">
-        {/* Status bar: autorun + agents + queue */}
-        <StatusBar />
+      <div className="px-4 space-y-6 max-w-[1280px] mx-auto w-full">
+        {/* Row 1: StatusBar + Agent Activity side by side on desktop */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <StatusBar />
+          <AgentActivityFeed />
+        </div>
 
-        {/* Today's activity */}
-        <TodayWidget />
+        {/* Row 2: Today + Agent Workload side by side on desktop */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <TodayWidget />
+          <AgentWorkloadWidget />
+        </div>
 
-        {/* Agent Activity Feed (collapsed by default) */}
-        <AgentActivityFeed />
-
-        {/* CEO Briefing */}
+        {/* Row 3: CEO Briefing — full width */}
         <CeoBriefingWidget />
 
-        {/* Agent Workload */}
-        <AgentWorkloadWidget />
-
-        {/* Stat cards */}
-        <div className="grid grid-cols-2 gap-2">
+        {/* Stat cards — 2 cols mobile / 4 cols desktop */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           <StatCard
             label="Success rate"
             value={`${stats.successRate}%`}
