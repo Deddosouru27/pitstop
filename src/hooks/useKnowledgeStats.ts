@@ -22,10 +22,10 @@ export function useKnowledgeStats() {
       const [totalRes, hotRes, archiveRes, embRes, entityRes, edgeRes, lastRes] = await Promise.all([
         supabase.from('extracted_knowledge').select('*', { count: 'exact', head: true }),
         supabase.from('extracted_knowledge').select('*', { count: 'exact', head: true })
-          .filter('routed_to::text', 'ilike', '%hot_backlog%'),
+          .ilike('routed_to', '%hot_backlog%'),
         supabase.from('extracted_knowledge').select('*', { count: 'exact', head: true })
-          .filter('routed_to::text', 'ilike', '%knowledge_base%')
-          .not('routed_to::text', 'ilike', '%hot_backlog%'),
+          .ilike('routed_to', '%knowledge_base%')
+          .not('routed_to', 'ilike', '%hot_backlog%'),
         supabase.from('extracted_knowledge').select('*', { count: 'exact', head: true })
           .not('embedding', 'is', null),
         supabase.from('entity_nodes').select('*', { count: 'exact', head: true }),

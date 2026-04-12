@@ -1408,7 +1408,10 @@ function CeoBriefingWidget() {
       const { data: result, error: err } = await supabase.rpc('ceo_briefing')
       if (cancelled) return
       if (err || !result) { setError(true); setLoading(false); return }
-      setData(result as CeoBriefingRaw)
+      // RPC may return an array — unwrap if needed
+      const raw = Array.isArray(result) ? (result[0] ?? null) : result
+      if (!raw) { setError(true); setLoading(false); return }
+      setData(raw as CeoBriefingRaw)
       setLoading(false)
     }
 
@@ -1819,12 +1822,20 @@ function CycleVelocityRpcWidget() {
       .rpc('cycle_velocity')
       .then(({ data: result }) => {
         if (cancelled) return
-        // RPC returns either a single object or wrapped in cycle_velocity key
-        const raw = result as CycleVelocityData | { cycle_velocity: CycleVelocityData } | null
-        if (!raw) { setLoading(false); return }
-        const parsed = 'cycle_velocity' in (raw as Record<string, unknown>)
-          ? (raw as { cycle_velocity: CycleVelocityData }).cycle_velocity
-          : raw as CycleVelocityData
+        if (!result) { setLoading(false); return }
+        // RPC may return array, single object, or {cycle_velocity: ...}
+        let parsed: CycleVelocityData | null = null
+        if (Array.isArray(result)) {
+          parsed = (result[0] as CycleVelocityData) ?? null
+        } else if (typeof result === 'object' && 'cycle_velocity' in (result as Record<string, unknown>)) {
+          parsed = (result as { cycle_velocity: CycleVelocityData }).cycle_velocity
+        } else {
+          parsed = result as CycleVelocityData
+        }
+        // Guard: ensure required numeric fields are present before setting data
+        if (!parsed || parsed.total == null || parsed.velocity_per_day == null) {
+          setLoading(false); return
+        }
         setData(parsed)
         setLoading(false)
       })
