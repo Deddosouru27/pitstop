@@ -1382,22 +1382,22 @@ function AgentActivityFeed() {
 
 // ── CEO Briefing widget ───────────────────────────────────────────────────────
 
-interface CeoBriefingData {
-  system_health?: string | null
-  active_cycle?: {
-    name?: string | null
+interface CeoBriefingRaw {
+  system_health?: Record<string, unknown> | null
+  planning_health?: Record<string, unknown> | null
+  velocity?: {
+    cycle_name?: string
     done?: number
     total?: number
     todo?: number
   } | null
-  top_findings?: Array<{ summary?: string; type?: string }> | null
+  todo_tasks?: Array<{ title?: string; strategic_id?: string }> | null
   blocked_tasks?: Array<{ title?: string; reason?: string }> | null
-  recent_completed?: Array<{ title?: string; completed_at?: string }> | null
-  planning_health?: string | null
+  recent_done?: Array<{ title?: string; completed?: string }> | null
 }
 
 function CeoBriefingWidget() {
-  const [data, setData]     = useState<CeoBriefingData | null>(null)
+  const [data, setData]     = useState<CeoBriefingRaw | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError]   = useState(false)
 
@@ -1408,7 +1408,7 @@ function CeoBriefingWidget() {
       const { data: result, error: err } = await supabase.rpc('ceo_briefing')
       if (cancelled) return
       if (err || !result) { setError(true); setLoading(false); return }
-      setData(result as CeoBriefingData)
+      setData(result as CeoBriefingRaw)
       setLoading(false)
     }
 
@@ -1419,20 +1419,22 @@ function CeoBriefingWidget() {
 
   if (loading || error || !data) return null
 
-  const cycle = data.active_cycle
+  const cycle = data.velocity
   const cyclePct = cycle && cycle.total && cycle.total > 0
     ? Math.round((cycle.done ?? 0) / cycle.total * 100)
     : null
 
+  // health_grade is a string inside the planning_health object
+  const healthGrade = (data.planning_health as Record<string, unknown> | null | undefined)?.health_grade as string | undefined
   const healthColor =
-    data.system_health === 'healthy'  ? 'text-emerald-400' :
-    data.system_health === 'degraded' ? 'text-amber-400' :
-    data.system_health === 'critical' ? 'text-red-400' :
+    healthGrade === 'GREEN'  ? 'text-emerald-400' :
+    healthGrade === 'YELLOW' ? 'text-amber-400' :
+    healthGrade === 'RED'    ? 'text-red-400' :
     'text-slate-400'
 
-  const recent = (data.recent_completed ?? []).slice(0, 3)
-  const blocked = (data.blocked_tasks ?? [])
-  const findings = (data.top_findings ?? [])
+  const recent    = (data.recent_done ?? []).slice(0, 3)
+  const blocked   = (data.blocked_tasks ?? [])
+  const todoTasks = (data.todo_tasks ?? [])
 
   return (
     <div className="bg-white/[0.04] rounded-2xl border border-white/[0.06] px-4 py-4 space-y-3">
@@ -1441,9 +1443,9 @@ function CeoBriefingWidget() {
         <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
           👑 CEO Briefing
         </p>
-        {data.system_health && (
+        {healthGrade && (
           <span className={`text-[10px] font-semibold uppercase tracking-wider ${healthColor}`}>
-            {data.system_health}
+            {healthGrade}
           </span>
         )}
       </div>
@@ -1452,7 +1454,7 @@ function CeoBriefingWidget() {
       {cycle && (
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <p className="text-xs text-slate-300 font-medium truncate">{cycle.name ?? 'Active cycle'}</p>
+            <p className="text-xs text-slate-300 font-medium truncate">{cycle.cycle_name ?? 'Active cycle'}</p>
             <span className="text-[11px] text-slate-500 shrink-0 ml-2">
               {cycle.done ?? 0}/{cycle.total ?? 0} · {cyclePct ?? 0}%
             </span>
@@ -1469,15 +1471,15 @@ function CeoBriefingWidget() {
         </div>
       )}
 
-      {/* Stats row: findings + blocked */}
+      {/* Stats row: todo + blocked */}
       <div className="grid grid-cols-2 gap-2 pt-1 border-t border-white/[0.04]">
         <div className="flex items-center gap-2">
-          <span className="text-sm">🔍</span>
+          <span className="text-sm">📋</span>
           <div>
-            <p className={`text-sm font-bold leading-none ${findings.length > 0 ? 'text-amber-400' : 'text-slate-600'}`}>
-              {findings.length}
+            <p className={`text-sm font-bold leading-none ${todoTasks.length > 0 ? 'text-slate-200' : 'text-slate-600'}`}>
+              {todoTasks.length}
             </p>
-            <p className="text-[10px] text-slate-600 mt-0.5">findings</p>
+            <p className="text-[10px] text-slate-600 mt-0.5">todo</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -1491,7 +1493,7 @@ function CeoBriefingWidget() {
         </div>
       </div>
 
-      {/* Recent completed */}
+      {/* Recent done */}
       {recent.length > 0 && (
         <div className="space-y-1 pt-1 border-t border-white/[0.04]">
           <p className="text-[10px] text-slate-600 uppercase tracking-wider">Недавно завершено</p>

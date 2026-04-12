@@ -1,3 +1,4 @@
+import { Component, type ReactNode, type ErrorInfo } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AppProvider, useApp } from './context/AppContext'
 import { ThemeProvider, useTheme } from './context/ThemeContext'
@@ -29,6 +30,27 @@ import PendingPage from './components/pending/PendingPage'
 import AuditPage from './components/audit/AuditPage'
 import IdeasScoredPage from './components/ideas/IdeasScoredPage'
 import WeeklyReportPage from './components/reports/WeeklyReportPage'
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
+  state = { hasError: false, error: null as Error | null }
+  static getDerivedStateFromError(error: Error) { return { hasError: true, error } }
+  componentDidCatch(error: Error, info: ErrorInfo) { console.error('[ErrorBoundary]', error, info.componentStack) }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: 24, color: '#f87171', fontFamily: 'monospace', background: '#0f172a', minHeight: '100vh' }}>
+          <h2 style={{ fontSize: 18, marginBottom: 12 }}>Pitstop crashed</h2>
+          <pre style={{ fontSize: 12, whiteSpace: 'pre-wrap', color: '#94a3b8' }}>{this.state.error?.message}</pre>
+          <button onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload() }}
+            style={{ marginTop: 16, padding: '8px 16px', background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer' }}>
+            Перезагрузить
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 function ThemeToggle() {
   const { theme, toggleTheme } = useTheme()
@@ -90,12 +112,14 @@ function AppShell() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <ThemeProvider>
-        <AppProvider>
-          <AppShell />
-        </AppProvider>
-      </ThemeProvider>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <ThemeProvider>
+          <AppProvider>
+            <AppShell />
+          </AppProvider>
+        </ThemeProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   )
 }
