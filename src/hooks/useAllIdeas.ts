@@ -5,6 +5,7 @@ import type { Idea } from '../types'
 
 export function useAllIdeas() {
   const [ideas, setIdeas] = useState<Idea[]>([])
+  const [totalCount, setTotalCount] = useState<number>(0)
   const [loading, setLoading] = useState(true)
 
   const ideasRef = useRef(ideas)
@@ -16,11 +17,12 @@ export function useAllIdeas() {
 
   const fetchAll = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase
-      .from('ideas')
-      .select('*')
-      .order('created_at', { ascending: false })
+    const [{ data }, { count }] = await Promise.all([
+      supabase.from('ideas').select('*').order('created_at', { ascending: false }),
+      supabase.from('ideas').select('*', { count: 'exact', head: true }),
+    ])
     if (data) setIdeas(data)
+    setTotalCount(count ?? data?.length ?? 0)
     setLoading(false)
   }, [])
 
@@ -66,5 +68,5 @@ export function useAllIdeas() {
     onDelete: (old) => { if (old.id) update(prev => prev.filter(i => i.id !== old.id)) },
   })
 
-  return { ideas, loading, markConverted, deleteIdea, updateStatus, rejectIdeas }
+  return { ideas, totalCount, loading, markConverted, deleteIdea, updateStatus, rejectIdeas }
 }

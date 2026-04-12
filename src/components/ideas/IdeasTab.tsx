@@ -230,7 +230,7 @@ function BulkBar({ count, total, onApprove, onReject, onConvert, onSelectAll, on
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function IdeasTab() {
-  const { ideas, loading, markConverted, deleteIdea, updateStatus, rejectIdeas } = useAllIdeas()
+  const { ideas, totalCount, loading, markConverted, deleteIdea, updateStatus, rejectIdeas } = useAllIdeas()
   const { projects } = useApp()
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('new')
   const [relevanceFilter, setRelevanceFilter] = useState<RelevanceFilter>('all')
@@ -322,7 +322,7 @@ export default function IdeasTab() {
         <div className="flex items-center gap-2">
           <Lightbulb size={20} className="text-purple-400" strokeWidth={1.75} />
           <h1 className="flex-1 text-2xl font-bold text-slate-100">Ideas</h1>
-          <span className="text-xs text-slate-600">{ideas.length}</span>
+          <span className="text-xs text-slate-600">{totalCount}</span>
           {selectMode ? (
             <button
               onClick={exitSelectMode}

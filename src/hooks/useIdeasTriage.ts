@@ -12,28 +12,33 @@ function isPending(idea: Idea): boolean {
 
 export function useIdeasTriage(actionFilter: ActionFilter = 'unreviewed') {
   const [ideas, setIdeas] = useState<Idea[]>([])
+  const [totalCount, setTotalCount] = useState<number>(0)
   const [loading, setLoading] = useState(true)
   const [totalReviewed, setTotalReviewed] = useState(0)
 
   const fetchIdeas = useCallback(async () => {
     setLoading(true)
-    let q = supabase
-      .from('ideas')
-      .select('*')
-      .order('created_at', { ascending: false })
+
+    let dataQ = supabase.from('ideas').select('*').order('created_at', { ascending: false })
+    let countQ = supabase.from('ideas').select('*', { count: 'exact', head: true })
 
     if (actionFilter === 'unreviewed') {
-      q = q.or('status.is.null,status.eq.pending,status.eq.new')
+      dataQ  = dataQ.or('status.is.null,status.eq.pending,status.eq.new')
+      countQ = countQ.or('status.is.null,status.eq.pending,status.eq.new')
     } else if (actionFilter === 'accepted') {
-      q = q.eq('status', 'accepted')
+      dataQ  = dataQ.eq('status', 'accepted')
+      countQ = countQ.eq('status', 'accepted')
     } else if (actionFilter === 'rejected') {
-      q = q.in('status', ['rejected', 'dismissed'])
+      dataQ  = dataQ.in('status', ['rejected', 'dismissed'])
+      countQ = countQ.in('status', ['rejected', 'dismissed'])
     } else if (actionFilter === 'deferred') {
-      q = q.eq('status', 'deferred')
+      dataQ  = dataQ.eq('status', 'deferred')
+      countQ = countQ.eq('status', 'deferred')
     }
 
-    const { data } = await q
+    const [{ data }, { count }] = await Promise.all([dataQ, countQ])
     if (data) setIdeas(data as Idea[])
+    setTotalCount(count ?? data?.length ?? 0)
     setLoading(false)
   }, [actionFilter])
 
@@ -92,5 +97,5 @@ export function useIdeasTriage(actionFilter: ActionFilter = 'unreviewed') {
 
   const pendingIdeas = actionFilter === 'unreviewed' ? ideas.filter(isPending) : ideas
 
-  return { ideas: pendingIdeas, loading, totalReviewed, dismiss, defer, convertToTask, refetch: fetchIdeas }
+  return { ideas: pendingIdeas, totalCount, loading, totalReviewed, dismiss, defer, convertToTask, refetch: fetchIdeas }
 }

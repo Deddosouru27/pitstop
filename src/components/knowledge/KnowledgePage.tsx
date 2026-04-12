@@ -973,7 +973,7 @@ function datePresetStart(preset: DatePreset): Date | null {
 }
 
 export default function KnowledgePage() {
-  const { items, loading, error, refresh } = useExtractedKnowledge()
+  const { items, total, loading, error, refresh } = useExtractedKnowledge()
   const [pageTab, setPageTab] = useState<PageTab>('knowledge')
   const [showPaste, setShowPaste] = useState(false)
 
@@ -992,9 +992,9 @@ export default function KnowledgePage() {
   const handleExport = async () => {
     setExporting(true)
     try {
-      const { data } = await supabase
+      const { data, count: exportCount } = await supabase
         .from('extracted_knowledge')
-        .select('content,knowledge_type,source_url,source_type,created_at')
+        .select('content,knowledge_type,source_url,source_type,created_at', { count: 'exact' })
         .neq('event_type', 'SUPERSEDED')
         .order('knowledge_type', { ascending: true })
         .order('created_at', { ascending: false })
@@ -1004,7 +1004,7 @@ export default function KnowledgePage() {
       const lines: string[] = [
         '# MAOS Knowledge Export',
         `Дата: ${today}`,
-        `Всего: ${rows.length} знаний`,
+        `Всего: ${exportCount ?? rows.length} знаний`,
         '',
         '---',
         '',
@@ -1072,7 +1072,7 @@ export default function KnowledgePage() {
   const stats = useMemo(() => {
     const hot = items.filter(i => routedContains(i.routed_to, 'hot_backlog')).length
     const strategic = items.filter(i => i.strategic_relevance != null && i.strategic_relevance >= 0.7).length
-    return { total: items.length, hot, strategic }
+    return { total, hot, strategic }
   }, [items])
 
   const routeCounts = useMemo(() => ({

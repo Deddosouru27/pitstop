@@ -229,14 +229,14 @@ export default function IdeasTriagePage() {
   const [autoResult, setAutoResult] = useState<AutoProcessResult | null>(null)
   const [autoError, setAutoError] = useState<string | null>(null)
 
-  const { ideas, loading, totalReviewed, dismiss, defer, convertToTask, refetch } = useIdeasTriage(actionFilter)
+  const { ideas, totalCount, loading, totalReviewed, dismiss, defer, convertToTask, refetch } = useIdeasTriage(actionFilter)
 
   const filtered = useMemo(() => {
     if (relevanceFilter === 'all') return ideas
     return ideas.filter(i => i.relevance === relevanceFilter)
   }, [ideas, relevanceFilter])
 
-  const total = ideas.length + totalReviewed
+  const total = totalCount + totalReviewed
   const reviewed = totalReviewed
 
   const relCounts = useMemo(() => ({
@@ -293,7 +293,7 @@ export default function IdeasTriagePage() {
         <div className="flex items-center gap-2 mb-1">
           <ListTodo size={18} className="text-slate-400" />
           <h1 className="text-base font-semibold text-slate-100">Ideas Triage</h1>
-          <span className="text-xs text-slate-500 bg-white/5 px-2 py-0.5 rounded-full">{ideas.length} осталось</span>
+          <span className="text-xs text-slate-500 bg-white/5 px-2 py-0.5 rounded-full">{totalCount} осталось</span>
         </div>
         {/* Progress bar — only meaningful for unreviewed */}
         {actionFilter === 'unreviewed' && (
@@ -359,7 +359,7 @@ export default function IdeasTriagePage() {
                   : 'bg-white/5 border-white/[0.06] text-slate-400 active:bg-white/10'
               }`}
             >
-              {r === 'all' ? `Все (${ideas.length})` : r === 'hot' ? `🔥 Hot (${relCounts.hot})` : `📐 Strategic (${relCounts.strategic})`}
+              {r === 'all' ? `Все (${totalCount})` : r === 'hot' ? `🔥 Hot (${relCounts.hot})` : `📐 Strategic (${relCounts.strategic})`}
             </button>
           ))}
         </div>

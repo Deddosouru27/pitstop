@@ -7,6 +7,7 @@ const FIELDS = 'id,content,knowledge_type,project_id,immediate_relevance,strateg
 
 export function useExtractedKnowledge() {
   const [items, setItems] = useState<ExtractedKnowledge[]>([])
+  const [total, setTotal] = useState<number>(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -17,7 +18,7 @@ export function useExtractedKnowledge() {
     async function load() {
       setLoading(true)
       const [mainRes, embRes] = await Promise.all([
-        supabase.from('extracted_knowledge').select(FIELDS).neq('event_type', 'SUPERSEDED').order('created_at', { ascending: false }),
+        supabase.from('extracted_knowledge').select(FIELDS, { count: 'exact' }).neq('event_type', 'SUPERSEDED').order('created_at', { ascending: false }),
         supabase.from('extracted_knowledge').select('id').not('embedding', 'is', null).neq('event_type', 'SUPERSEDED'),
       ])
 
@@ -27,6 +28,7 @@ export function useExtractedKnowledge() {
       } else {
         const embIds = new Set((embRes.data ?? []).map(r => r.id))
         setItems((mainRes.data ?? []).map(i => ({ ...i, has_embedding: embIds.has(i.id) })))
+        setTotal(mainRes.count ?? mainRes.data?.length ?? 0)
         setError(null)
       }
       setLoading(false)
@@ -36,5 +38,5 @@ export function useExtractedKnowledge() {
     return () => { cancelled = true }
   }, [refreshKey])
 
-  return { items, loading, error, refresh: () => setRefreshKey(k => k + 1) }
+  return { items, total, loading, error, refresh: () => setRefreshKey(k => k + 1) }
 }

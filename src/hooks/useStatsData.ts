@@ -25,15 +25,24 @@ export function useStatsData() {
       since.setDate(since.getDate() - 13)
       const sinceStr = since.toISOString().slice(0, 10)
 
-      const [knowledgeRes, ideasRes, nodesRes, edgesRes, sourcesRes] = await Promise.all([
+      const [knowledgeRes, hotIdeasRes, strategicIdeasRes, totalIdeasRes, nodesRes, edgesRes, sourcesRes] = await Promise.all([
         supabase
           .from('extracted_knowledge')
           .select('created_at')
           .gte('created_at', sinceStr)
-          .order('created_at', { ascending: true }),
+          .order('created_at', { ascending: true })
+          .range(0, 4999),
         supabase
           .from('ideas')
-          .select('relevance'),
+          .select('*', { count: 'exact', head: true })
+          .eq('relevance', 'hot'),
+        supabase
+          .from('ideas')
+          .select('*', { count: 'exact', head: true })
+          .eq('relevance', 'strategic'),
+        supabase
+          .from('ideas')
+          .select('*', { count: 'exact', head: true }),
         supabase
           .from('entity_nodes')
           .select('*', { count: 'exact', head: true }),
@@ -42,7 +51,8 @@ export function useStatsData() {
           .select('*', { count: 'exact', head: true }),
         supabase
           .from('ingested_content')
-          .select('source_type'),
+          .select('source_type')
+          .range(0, 4999),
       ])
 
       if (cancelled) return
@@ -60,11 +70,10 @@ export function useStatsData() {
       }
       const knowledgeByDay: DayCount[] = Array.from(dayCounts.entries()).map(([date, count]) => ({ date, count }))
 
-      // 2. Relevance stats
-      const ideasAll = ideasRes.data ?? []
-      const hot = ideasAll.filter(i => i.relevance === 'hot').length
-      const strategic = ideasAll.filter(i => i.relevance === 'strategic').length
-      const total = ideasAll.length
+      // 2. Relevance stats — use exact counts from DB
+      const hot       = hotIdeasRes.count ?? 0
+      const strategic = strategicIdeasRes.count ?? 0
+      const total     = totalIdeasRes.count ?? 0
       const relevanceStats: RelevanceStat[] = [
         { label: '🔥 Горячие', count: hot, pct: total > 0 ? Math.round(hot / total * 100) : 0 },
         { label: '📐 Стратегические', count: strategic, pct: total > 0 ? Math.round(strategic / total * 100) : 0 },
