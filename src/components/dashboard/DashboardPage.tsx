@@ -1,12 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
-import { BarChart2, ChevronDown, X, Plus, Inbox, Lightbulb, TrendingUp, Users } from 'lucide-react'
+import { BarChart2, ChevronDown, X, Plus, Inbox, Lightbulb, TrendingUp } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAgentStats } from '../../hooks/useAgentStats'
 import { useCyclePlan } from '../../hooks/useCyclePlan'
-import { useKnowledgeStats } from '../../hooks/useKnowledgeStats'
-import CycleVelocity from './CycleVelocity'
 import type { CyclePlanPhase, Task, GoalChain } from '../../types'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -63,168 +61,60 @@ function CustomTooltip({
   )
 }
 
-// ── Knowledge stats widget ────────────────────────────────────────────────────
+// ── Status Bar (autorun + agents + queue, one line) ──────────────────────────
 
-function KnowledgeStatsWidget() {
-  const { stats, loading } = useKnowledgeStats()
-  if (loading || !stats) return null
-  return (
-    <div className="bg-white/5 rounded-2xl px-4 py-4 border border-white/[0.06] space-y-3">
-      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">🧠 Knowledge Base</p>
-
-      {/* Row 1: total / hot / archive */}
-      <div className="grid grid-cols-3 gap-2">
-        <div className="text-center">
-          <p className="text-xl font-bold text-slate-100">{stats.total}</p>
-          <p className="text-[10px] text-slate-500 mt-0.5">знаний</p>
-        </div>
-        <div className="text-center">
-          <p className="text-xl font-bold text-red-400">{stats.hot}</p>
-          <p className="text-[10px] text-slate-500 mt-0.5">🔥 hot ({stats.hotPct}%)</p>
-        </div>
-        <div className="text-center">
-          <p className="text-xl font-bold text-blue-400">{stats.archive}</p>
-          <p className="text-[10px] text-slate-500 mt-0.5">📚 архив</p>
-        </div>
-      </div>
-
-      {/* Row 2: entities / edges */}
-      <div className="grid grid-cols-2 gap-2 pt-1 border-t border-white/[0.04]">
-        <div className="text-center">
-          <p className="text-base font-bold text-emerald-400">{stats.entities}</p>
-          <p className="text-[10px] text-slate-500 mt-0.5">🕸 entities</p>
-        </div>
-        <div className="text-center">
-          <p className="text-base font-bold text-cyan-400">{stats.edges}</p>
-          <p className="text-[10px] text-slate-500 mt-0.5">↔ edges</p>
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between pt-1 border-t border-white/[0.04]">
-        <span className="text-[11px] text-slate-600">{stats.withEmbedding} с embedding</span>
-        {stats.lastIngestedAt && (
-          <span className="text-[11px] text-slate-600">📥 {timeAgo(stats.lastIngestedAt)}</span>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ── Agent count widget ────────────────────────────────────────────────────────
-
-function AgentCountWidget() {
-  const [total, setTotal] = useState<number>(0)
-  const [active, setActive] = useState<number>(0)
+function StatusBar() {
+  const [isActive, setIsActive]     = useState(false)
+  const [agentTotal, setAgentTotal] = useState(0)
+  const [agentActive, setAgentActive] = useState(0)
+  const [todoCount, setTodoCount]   = useState(0)
+  const [quarantine, setQuarantine] = useState(0)
 
   useEffect(() => {
     let cancelled = false
-    Promise.all([
-      supabase.from('agents').select('*', { count: 'exact', head: true }),
-      supabase.from('agents').select('*', { count: 'exact', head: true }).neq('status', 'idle'),
-    ]).then(([totalRes, activeRes]) => {
+    async function load() {
+      const [evRes, todoRes, totalRes, activeRes, quarRes] = await Promise.all([
+        supabase.from('agent_events').select('created_at').order('created_at', { ascending: false }).limit(1),
+        supabase.from('tasks').select('*', { count: 'exact', head: true }).eq('status', 'todo'),
+        supabase.from('agents').select('*', { count: 'exact', head: true }),
+        supabase.from('agents').select('*', { count: 'exact', head: true }).neq('status', 'idle'),
+        supabase.from('ingested_content').select('*', { count: 'exact', head: true }).eq('quarantined', true),
+      ])
       if (cancelled) return
-      setTotal(totalRes.count ?? 0)
-      setActive(activeRes.count ?? 0)
-    })
-    return () => { cancelled = true }
-  }, [])
-
-  return (
-    <div className="bg-white/5 rounded-2xl px-4 py-3 border border-white/[0.06] flex items-center gap-3">
-      <Users size={16} className="text-purple-400 shrink-0" strokeWidth={1.75} />
-      <p className="text-xs font-medium text-slate-300 flex-1">
-        Агенты: <span className="text-slate-100 font-bold">{total}</span>
-        <span className="text-slate-600 mx-1.5">|</span>
-        Активных: <span className={active > 0 ? 'text-emerald-400 font-bold' : 'text-slate-500 font-bold'}>{active}</span>
-      </p>
-      <QuarantineCount />
-    </div>
-  )
-}
-
-function QuarantineCount() {
-  const [count, setCount] = useState<number>(0)
-
-  useEffect(() => {
-    let cancelled = false
-    supabase
-      .from('ingested_content')
-      .select('*', { count: 'exact', head: true })
-      .eq('quarantined', true)
-      .then(({ count: c }) => { if (!cancelled) setCount(c ?? 0) })
-    return () => { cancelled = true }
-  }, [])
-
-  if (count === 0) return null
-  return (
-    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-900/40 text-amber-400 shrink-0">
-      ⚠️ {count} карантин
-    </span>
-  )
-}
-
-// ── Autorun status ────────────────────────────────────────────────────────────
-
-function AutorunStatus() {
-  const [lastEvent, setLastEvent] = useState<{
-    event_type: string
-    details: Record<string, unknown> | null
-    created_at: string
-  } | null>(null)
-  const [todoCount, setTodoCount] = useState<number>(0)
-
-  useEffect(() => {
-    let cancelled = false
-    Promise.all([
-      supabase
-        .from('agent_events')
-        .select('event_type, details, created_at')
-        .order('created_at', { ascending: false })
-        .limit(1),
-      supabase
-        .from('tasks')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'todo'),
-    ]).then(([evRes, todoRes]) => {
-      if (cancelled) return
-      setLastEvent((evRes.data?.[0] as typeof lastEvent) ?? null)
+      const lastTs = (evRes.data?.[0] as { created_at: string } | undefined)?.created_at
+      setIsActive(!!lastTs && (Date.now() - new Date(lastTs).getTime()) < 5 * 60 * 1000)
       setTodoCount(todoRes.count ?? 0)
-    })
-    return () => { cancelled = true }
+      setAgentTotal(totalRes.count ?? 0)
+      setAgentActive(activeRes.count ?? 0)
+      setQuarantine(quarRes.count ?? 0)
+    }
+    load()
+    const iv = setInterval(load, 30_000)
+    return () => { cancelled = true; clearInterval(iv) }
   }, [])
 
-  // Active only if last agent_event is within 5 minutes
-  const isActive = lastEvent
-    ? (Date.now() - new Date(lastEvent.created_at).getTime()) < 5 * 60 * 1000
-    : false
-
-  const lastTaskTitle =
-    (lastEvent?.details as Record<string, unknown> | null)?.task_title as string | undefined ??
-    (lastEvent?.details as Record<string, unknown> | null)?.title as string | undefined ??
-    null
-
-  const isOkEvent = lastEvent
-    ? !lastEvent.event_type.includes('fail') && !lastEvent.event_type.includes('error') && !lastEvent.event_type.includes('blocked')
-    : true
-
   return (
-    <div className="bg-white/5 rounded-2xl px-4 py-3 border border-white/[0.06] space-y-1.5">
-      <div className="flex items-center gap-2">
-        <span className={`w-2 h-2 rounded-full shrink-0 ${isActive ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
-        <p className="text-xs font-semibold text-slate-300">
-          🤖 Autorun: <span className={isActive ? 'text-emerald-400' : 'text-slate-500'}>{isActive ? 'активен' : 'остановлен'}</span>
-        </p>
-        {todoCount > 0 && (
-          <span className="ml-auto text-[10px] text-slate-500 bg-white/5 px-2 py-0.5 rounded-full">
-            {todoCount} в очереди
-          </span>
-        )}
-      </div>
-      {lastTaskTitle && (
-        <p className="text-xs text-slate-500 pl-4">
-          Последняя: <span className="text-slate-300">{lastTaskTitle}</span>{' '}
-          {isOkEvent ? '✅' : '❌'}
-        </p>
+    <div className="bg-white/5 rounded-2xl px-4 py-2.5 border border-white/[0.06] flex items-center gap-2 flex-wrap text-xs">
+      <span className={`w-2 h-2 rounded-full shrink-0 ${isActive ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
+      <span className="text-slate-300">
+        🤖 Autorun: <span className={isActive ? 'text-emerald-400 font-semibold' : 'text-slate-500'}>{isActive ? 'активен' : 'остановлен'}</span>
+      </span>
+      <span className="text-slate-700">·</span>
+      <span className="text-slate-400">
+        👥 {agentTotal} агентов
+        {agentActive > 0 && <span className="text-emerald-400 font-semibold"> ({agentActive} активных)</span>}
+      </span>
+      {todoCount > 0 && (
+        <>
+          <span className="text-slate-700">·</span>
+          <span className="text-slate-500">{todoCount} в очереди</span>
+        </>
+      )}
+      {quarantine > 0 && (
+        <>
+          <span className="text-slate-700">·</span>
+          <span className="text-amber-400 font-semibold">⚠️ {quarantine} карантин</span>
+        </>
       )}
     </div>
   )
@@ -648,110 +538,6 @@ function CycleWidget() {
   )
 }
 
-// ── Activity Feed ─────────────────────────────────────────────────────────────
-
-interface FeedItem {
-  id: string
-  icon: string
-  text: string
-  sub: string | null
-  ts: string
-}
-
-function ActivityFeed() {
-  const [items, setItems] = useState<FeedItem[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    let cancelled = false
-    Promise.all([
-      supabase
-        .from('context_snapshots')
-        .select('id, snapshot_type, content, created_at')
-        .in('snapshot_type', ['task_completed', 'ai_summary'])
-        .order('created_at', { ascending: false })
-        .limit(10),
-      supabase
-        .from('tasks')
-        .select('id, title, completed_at, status')
-        .not('completed_at', 'is', null)
-        .order('completed_at', { ascending: false })
-        .limit(10),
-    ]).then(([snapsRes, tasksRes]) => {
-      if (cancelled) return
-
-      const feed: FeedItem[] = []
-
-      for (const s of snapsRes.data ?? []) {
-        const c = s.content as Record<string, unknown>
-        if (s.snapshot_type === 'task_completed') {
-          feed.push({
-            id: `snap-${s.id}`,
-            icon: '✅',
-            text: `Задача: ${String(c.title ?? '—')}`,
-            sub: null,
-            ts: s.created_at,
-          })
-        } else if (s.snapshot_type === 'ai_summary') {
-          const url = String(c.source_url ?? c.what_done ?? '')
-          const kCount = c.knowledge_count != null ? `${c.knowledge_count} знаний` : null
-          feed.push({
-            id: `snap-${s.id}`,
-            icon: '📥',
-            text: url ? `Обработано: ${url.length > 60 ? url.slice(0, 60) + '…' : url}` : String(c.what_done ?? 'AI summary'),
-            sub: kCount,
-            ts: s.created_at,
-          })
-        }
-      }
-
-      for (const t of tasksRes.data ?? []) {
-        if (!t.completed_at) continue
-        feed.push({
-          id: `task-${t.id}`,
-          icon: '✔️',
-          text: `Закрыто: ${t.title}`,
-          sub: null,
-          ts: t.completed_at,
-        })
-      }
-
-      // Deduplicate by id and sort by date desc, take top 10
-      const seen = new Set<string>()
-      const merged = feed
-        .filter(f => { if (seen.has(f.id)) return false; seen.add(f.id); return true })
-        .sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime())
-        .slice(0, 10)
-
-      setItems(merged)
-      setLoading(false)
-    })
-    return () => { cancelled = true }
-  }, [])
-
-  if (loading) return null
-  if (items.length === 0) return null
-
-  return (
-    <div className="bg-white/5 rounded-2xl px-4 py-4 border border-white/[0.06] space-y-1">
-      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider pb-1">
-        ⚡ Последние события
-      </p>
-      {items.map(item => (
-        <div key={item.id} className="flex items-start gap-2.5 py-1.5 border-t border-white/[0.04] first:border-0">
-          <span className="text-sm shrink-0 mt-0.5">{item.icon}</span>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs text-slate-300 leading-snug truncate">{item.text}</p>
-            {item.sub && <p className="text-[10px] text-slate-600 mt-0.5">{item.sub}</p>}
-          </div>
-          <span className="text-[10px] text-slate-600 shrink-0 font-mono">
-            {timeAgo(item.ts)}
-          </span>
-        </div>
-      ))}
-    </div>
-  )
-}
 
 // ── Agent Workload widget ─────────────────────────────────────────────────────
 
@@ -832,26 +618,26 @@ function AgentWorkloadWidget() {
           <span className="text-[10px] text-slate-600 truncate ml-2 max-w-[160px]">{cycleName}</span>
         )}
       </div>
-      <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-2">
         {rows.map(row => (
-          <div key={row.assignee} className="flex items-center gap-3">
-            <p className="text-xs text-slate-300 w-20 shrink-0">
+          <div key={row.assignee} className="bg-white/[0.03] rounded-xl px-3 py-2.5 space-y-1.5">
+            <p className="text-[11px] font-semibold text-slate-300">
               {ASSIGNEE_DISPLAY[row.assignee] ?? row.assignee}
             </p>
-            <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="flex items-center gap-1 flex-wrap">
+              {row.in_progress > 0 && (
+                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-900/30 text-blue-400">
+                  {row.in_progress} wip
+                </span>
+              )}
               {row.todo > 0 && (
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/5 text-slate-400">
+                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-white/5 text-slate-500">
                   {row.todo} todo
                 </span>
               )}
-              {row.in_progress > 0 && (
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-900/30 text-blue-400">
-                  {row.in_progress} active
-                </span>
-              )}
               {row.done > 0 && (
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-900/20 text-emerald-600">
-                  {row.done} done
+                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-900/20 text-emerald-600">
+                  {row.done} ✓
                 </span>
               )}
             </div>
@@ -1296,6 +1082,7 @@ function activityTitle(ev: AgentActivityRow): string {
 function AgentActivityFeed() {
   const [rows, setRows]               = useState<AgentActivityRow[]>([])
   const [loading, setLoading]         = useState(true)
+  const [expanded, setExpanded]       = useState(false)
   const [hideHeartbeat, setHideHeartbeat] = useState(true)
 
   useEffect(() => {
@@ -1341,12 +1128,29 @@ function AgentActivityFeed() {
 
   const visible = hideHeartbeat ? rows.filter(r => r.event_type !== 'heartbeat') : rows
 
+  // Collapsed: single button row
+  if (!expanded) {
+    return (
+      <button
+        onClick={() => setExpanded(true)}
+        className="w-full flex items-center justify-between bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-2xl px-4 py-2.5 transition-colors"
+      >
+        <span className="text-xs text-slate-400 font-medium">🤖 Agent Activity ({rows.length})</span>
+        <ChevronDown size={14} className="text-slate-600" />
+      </button>
+    )
+  }
+
   return (
     <div className="bg-white/5 rounded-2xl border border-white/[0.06] px-4 py-4 space-y-1">
       <div className="flex items-center justify-between pb-1">
-        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-          🤖 Agent Activity
-        </p>
+        <button
+          onClick={() => setExpanded(false)}
+          className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wider active:opacity-70"
+        >
+          🤖 Agent Activity ({rows.length})
+          <ChevronDown size={12} className="rotate-180 text-slate-600" />
+        </button>
         <button
           onClick={() => setHideHeartbeat(v => !v)}
           className={`text-[10px] px-2 py-0.5 rounded-full transition-colors ${
@@ -1400,6 +1204,7 @@ function CeoBriefingWidget() {
   const [data, setData]     = useState<CeoBriefingRaw | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError]   = useState(false)
+  const [expanded, setExpanded] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -1439,86 +1244,105 @@ function CeoBriefingWidget() {
   const blocked   = (data.blocked_tasks ?? [])
   const todoTasks = (data.todo_tasks ?? [])
 
+  // Compact summary line: "👑 Cycle Name · 82/105 · 78% · GREEN"
+  const summaryLine = [
+    cycle?.cycle_name ?? 'Active cycle',
+    cycle ? `${cycle.done ?? 0}/${cycle.total ?? 0}` : null,
+    cyclePct != null ? `${cyclePct}%` : null,
+    healthGrade ?? null,
+  ].filter(Boolean).join(' · ')
+
   return (
-    <div className="bg-white/[0.04] rounded-2xl border border-white/[0.06] px-4 py-4 space-y-3">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-          👑 CEO Briefing
+    <div className="bg-white/[0.04] rounded-2xl border border-white/[0.06] overflow-hidden">
+      {/* Compact header — always visible, click to expand */}
+      <button
+        onClick={() => setExpanded(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 text-left active:bg-white/5 transition-colors"
+      >
+        <p className="text-xs text-slate-300 font-medium truncate flex-1 mr-2">
+          👑 {summaryLine}
         </p>
-        {healthGrade && (
-          <span className={`text-[10px] font-semibold uppercase tracking-wider ${healthColor}`}>
-            {healthGrade}
-          </span>
-        )}
-      </div>
-
-      {/* Cycle progress */}
-      {cycle && (
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-slate-300 font-medium truncate">{cycle.cycle_name ?? 'Active cycle'}</p>
-            <span className="text-[11px] text-slate-500 shrink-0 ml-2">
-              {cycle.done ?? 0}/{cycle.total ?? 0} · {cyclePct ?? 0}%
+        <div className="flex items-center gap-2 shrink-0">
+          {healthGrade && (
+            <span className={`text-[10px] font-semibold uppercase tracking-wider ${healthColor}`}>
+              {healthGrade}
             </span>
-          </div>
-          <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-            <div
-              className="h-full rounded-full bg-purple-500 transition-all"
-              style={{ width: `${cyclePct ?? 0}%` }}
-            />
-          </div>
-          {(cycle.todo ?? 0) > 0 && (
-            <p className="text-[10px] text-slate-600">{cycle.todo} задач в очереди</p>
           )}
+          <ChevronDown size={13} className={`text-slate-600 transition-transform ${expanded ? 'rotate-180' : ''}`} />
         </div>
-      )}
+      </button>
 
-      {/* Stats row: todo + blocked */}
-      <div className="grid grid-cols-2 gap-2 pt-1 border-t border-white/[0.04]">
-        <div className="flex items-center gap-2">
-          <span className="text-sm">📋</span>
-          <div>
-            <p className={`text-sm font-bold leading-none ${todoTasks.length > 0 ? 'text-slate-200' : 'text-slate-600'}`}>
-              {todoTasks.length}
-            </p>
-            <p className="text-[10px] text-slate-600 mt-0.5">todo</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm">🚫</span>
-          <div>
-            <p className={`text-sm font-bold leading-none ${blocked.length > 0 ? 'text-red-400' : 'text-slate-600'}`}>
-              {blocked.length}
-            </p>
-            <p className="text-[10px] text-slate-600 mt-0.5">заблокировано</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Recent done */}
-      {recent.length > 0 && (
-        <div className="space-y-1 pt-1 border-t border-white/[0.04]">
-          <p className="text-[10px] text-slate-600 uppercase tracking-wider">Недавно завершено</p>
-          {recent.map((t, i) => (
-            <div key={i} className="flex items-start gap-2">
-              <span className="text-[10px] mt-0.5 shrink-0">✅</span>
-              <p className="text-[11px] text-slate-400 leading-snug line-clamp-1">{t.title ?? '—'}</p>
+      {/* Expanded detail */}
+      {expanded && (
+        <div className="px-4 pb-4 space-y-3 border-t border-white/[0.04]">
+          {/* Cycle progress */}
+          {cycle && (
+            <div className="space-y-1.5 pt-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-slate-300 font-medium truncate">{cycle.cycle_name ?? 'Active cycle'}</p>
+                <span className="text-[11px] text-slate-500 shrink-0 ml-2">
+                  {cycle.done ?? 0}/{cycle.total ?? 0} · {cyclePct ?? 0}%
+                </span>
+              </div>
+              <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-purple-500 transition-all"
+                  style={{ width: `${cyclePct ?? 0}%` }}
+                />
+              </div>
+              {(cycle.todo ?? 0) > 0 && (
+                <p className="text-[10px] text-slate-600">{cycle.todo} задач в очереди</p>
+              )}
             </div>
-          ))}
-        </div>
-      )}
+          )}
 
-      {/* Blocked tasks preview */}
-      {blocked.length > 0 && (
-        <div className="space-y-1 pt-1 border-t border-white/[0.04]">
-          <p className="text-[10px] text-slate-600 uppercase tracking-wider">Блокеры</p>
-          {blocked.slice(0, 2).map((t, i) => (
-            <div key={i} className="flex items-start gap-2">
-              <span className="text-[10px] mt-0.5 shrink-0">🚫</span>
-              <p className="text-[11px] text-red-400/80 leading-snug line-clamp-1">{t.title ?? '—'}</p>
+          {/* Stats row: todo + blocked */}
+          <div className="grid grid-cols-2 gap-2 pt-1 border-t border-white/[0.04]">
+            <div className="flex items-center gap-2">
+              <span className="text-sm">📋</span>
+              <div>
+                <p className={`text-sm font-bold leading-none ${todoTasks.length > 0 ? 'text-slate-200' : 'text-slate-600'}`}>
+                  {todoTasks.length}
+                </p>
+                <p className="text-[10px] text-slate-600 mt-0.5">todo</p>
+              </div>
             </div>
-          ))}
+            <div className="flex items-center gap-2">
+              <span className="text-sm">🚫</span>
+              <div>
+                <p className={`text-sm font-bold leading-none ${blocked.length > 0 ? 'text-red-400' : 'text-slate-600'}`}>
+                  {blocked.length}
+                </p>
+                <p className="text-[10px] text-slate-600 mt-0.5">заблокировано</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Recent done */}
+          {recent.length > 0 && (
+            <div className="space-y-1 pt-1 border-t border-white/[0.04]">
+              <p className="text-[10px] text-slate-600 uppercase tracking-wider">Недавно завершено</p>
+              {recent.map((t, i) => (
+                <div key={i} className="flex items-start gap-2">
+                  <span className="text-[10px] mt-0.5 shrink-0">✅</span>
+                  <p className="text-[11px] text-slate-400 leading-snug line-clamp-1">{t.title ?? '—'}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Blocked tasks preview */}
+          {blocked.length > 0 && (
+            <div className="space-y-1 pt-1 border-t border-white/[0.04]">
+              <p className="text-[10px] text-slate-600 uppercase tracking-wider">Блокеры</p>
+              {blocked.slice(0, 2).map((t, i) => (
+                <div key={i} className="flex items-start gap-2">
+                  <span className="text-[10px] mt-0.5 shrink-0">🚫</span>
+                  <p className="text-[11px] text-red-400/80 leading-snug line-clamp-1">{t.title ?? '—'}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1954,14 +1778,13 @@ export default function DashboardPage() {
       </div>
 
       <div className="px-4 space-y-6">
-        {/* Autorun status + agent count */}
-        <AutorunStatus />
-        <AgentCountWidget />
+        {/* Status bar: autorun + agents + queue */}
+        <StatusBar />
 
         {/* Today's activity */}
         <TodayWidget />
 
-        {/* Agent Activity Feed */}
+        {/* Agent Activity Feed (collapsed by default) */}
         <AgentActivityFeed />
 
         {/* CEO Briefing */}
@@ -1996,9 +1819,6 @@ export default function DashboardPage() {
 
         {/* Quick actions */}
         <QuickActions onOpenCapture={() => setCaptureOpen(true)} />
-
-        {/* Knowledge stats */}
-        <KnowledgeStatsWidget />
 
         {/* Bar chart */}
         <div className="bg-white/5 rounded-2xl px-4 pt-4 pb-2 border border-white/[0.06]">
@@ -2041,12 +1861,6 @@ export default function DashboardPage() {
 
         {/* Cycle 2 progress */}
         <CycleTwoWidget />
-
-        {/* Cycle velocity (bar comparison) */}
-        <CycleVelocity />
-
-        {/* Activity feed */}
-        <ActivityFeed />
       </div>
 
       {captureOpen && <QuickCaptureModal onClose={() => setCaptureOpen(false)} />}

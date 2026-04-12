@@ -50,7 +50,7 @@ export function useAgentStats() {
 
       // ── Success rate: done / (done + blocked) за 7 дней ─────────────────
       const since7 = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-      const [doneRes, blockedRes] = await Promise.all([
+      const [doneRes, failedRes, failedEvRes] = await Promise.all([
         supabase
           .from('tasks')
           .select('*', { count: 'exact', head: true })
@@ -59,14 +59,19 @@ export function useAgentStats() {
         supabase
           .from('tasks')
           .select('*', { count: 'exact', head: true })
-          .eq('status', 'blocked')
+          .in('status', ['blocked', 'cancelled'])
           .gte('updated_at', since7),
+        supabase
+          .from('agent_events')
+          .select('*', { count: 'exact', head: true })
+          .eq('event_type', 'task_failed')
+          .gte('created_at', since7),
       ])
       const completed7 = doneRes.count ?? 0
-      const blocked7   = blockedRes.count ?? 0
+      const failed7    = (failedRes.count ?? 0) + (failedEvRes.count ?? 0)
       const successRate =
-        completed7 + blocked7 > 0
-          ? Math.round((completed7 / (completed7 + blocked7)) * 100)
+        completed7 + failed7 > 0
+          ? Math.round((completed7 / (completed7 + failed7)) * 100)
           : 100
 
       // ── График активности: задачи done по completed_at за 14 дней ────────
